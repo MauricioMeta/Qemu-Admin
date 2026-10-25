@@ -21,20 +21,37 @@ Linhas com a hora local, um prefixo e o texto:
 Não entram as consultas internas do app (a miniatura da tela a cada 5 s e a consulta de estado) nem os `STOP`/`RESUME` do gdbstub das placas ESP32/Arduino.
 
 ## Enviar
-- Texto que **não** começa com `{` é um comando do monitor (vai pelo QMP `human-monitor-command`): `info status`, `info registers`, `info qtree`, `info mtree`…
-- Texto que começa com `{` é uma mensagem QMP: `{"execute": "query-status"}`, com `"arguments"` opcional.
+O prompt está **sempre ativo**, com a VM ligada ou desligada. O que se digita vai para um destes lugares (`QemuAdmin.Terminal.route/1`):
+
+| O que é | Exemplo | Precisa da VM ligada? |
+| --- | --- | --- |
+| **Ferramenta do QEMU** (primeira palavra `qemu-img`, `qemu-io` ou `qemu-system-<arq>`) | `qemu-img info disk0.qcow2`, `qemu-system-arm -machine help` | **não** |
+| **Comando do monitor** (texto que não começa com `{`; vai pelo QMP `human-monitor-command`) | `info status`, `info registers`, `stop` | sim |
+| **Mensagem QMP** (texto que começa com `{`) | `{"execute": "query-status"}`, com `"arguments"` opcional | sim |
+
+- Com a VM desligada, um comando do monitor ou QMP vira uma linha de erro no histórico, que explica isso e lembra as ferramentas.
 - **↑ / ↓** percorrem o que foi enviado antes, para editar e mandar de novo (hook `CmdInput`).
-- Só com a VM ligada. Desligada, o terminal mostra o histórico da última execução.
+- Desligada, o terminal mostra o histórico da última execução e o que foi rodado depois dela.
+
+## Ferramentas com a VM desligada
+Rodam **na pasta da VM** (um disco é só `disk0.qcow2`), sem shell (nada de `|`, `>` ou `&&`), com limite de **30 s** e de 64 KiB de saída; a saída (junto com o erro) e o código de saída aparecem no histórico. Ao terminar, a página recarrega o que a ferramenta pode ter mudado (a tabela de discos da Visão geral).
+
+- **`qemu-img`**: qualquer comando (`create`, `info`, `convert`, `resize`, `snapshot`, `check`, `map`, `commit`, `rebase`…). Ex.: `qemu-img create -f qcow2 extra.qcow2 8G`.
+- **`qemu-io`**: só com `-c` (sem ele seria interativo e ficaria esperando). Ex.: `qemu-io -c "read 0 512" disk0.qcow2`.
+- **`qemu-system-<arq>`**: só para **listar o que o QEMU tem** — `-machine help`, `-cpu help`, `-device help` (ou `-device e1000,help`), `-accel help`, `-display help`, `-netdev help`, `-object help`, `-version`. Qualquer outro uso é recusado, com a indicação de usar o botão Ligar: o terminal não inicia VMs.
+- Não se abre outro programa: só os executáveis da pasta do QEMU em uso.
+- No log (`commands.log`): o comando entra como `tool` (`$`), a saída como `received` (`‹`) e a falha como `error` (`!`); um texto recusado entra como `typed` (`›`) e o erro logo depois.
 
 ## Sugestões ao digitar
 Enquanto você digita, o prompt sugere comandos do [[Catalogo de comandos]], cada um com o uso e a descrição (o texto vem do próprio QEMU, em inglês):
 
+- **Ferramentas** (`ferramenta` na lista): `qemu-img cre` oferece `qemu-img create [-f FMT] … FILE [SIZE]`; também `qemu-io` e os `qemu-system-<arq> -machine help`, `-cpu help`…
 - **Comandos do monitor** (`monitor` na lista): `info reg` → `info registers [-a|vcpu]`, com a descrição completa embaixo. `info ` sozinho lista os 70 `info …`.
 - **Comandos QMP** (`QMP`): no prompt comum, digitar `query-sta` oferece `query-status`; ao aceitar, o prompt vira a mensagem pronta, `{"execute": "query-status"}` (com os argumentos obrigatórios em branco, quando há).
 - **Dentro de uma mensagem QMP**: em `{"execute": "blockdev-ch…` sugere os nomes dos comandos; em `"arguments": {"fi…` sugere os argumentos daquele comando que ainda faltam (tipo, obrigatório ou opcional, descrição, e os valores possíveis dos enums).
 - Com o comando do monitor já completo e os argumentos sendo digitados, o uso e a descrição ficam à vista.
 - Teclas: **↑ / ↓** escolhem, **Tab** aceita, **Esc** fecha, **Enter** envia o que está digitado (ou aceita, se você escolheu um item com as setas); o clique também aceita. Sem sugestões abertas, ↑ / ↓ voltam a percorrer o histórico.
-- O navegador baixa o catálogo uma vez (`GET /terminal/commands.json`, `TerminalController`) e filtra no próprio navegador; o código está no hook `CmdInput` (`assets/js/hooks/cmd_input.js`).
+- O navegador baixa o catálogo (`GET /terminal/commands.json`, `TerminalController`, com ETag: só baixa de novo se o arquivo mudou) e filtra no próprio navegador; o código está no hook `CmdInput` (`assets/js/hooks/cmd_input.js`).
 
 ## Editar a linha de partida
 O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.

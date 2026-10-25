@@ -25,7 +25,7 @@ defmodule QemuAdmin.TerminalCatalogTest do
       assert [_ | _] = entry["emulators"], entry["name"]
     end
 
-    for list <- ["hmp", "qmp", "qmp_events"] do
+    for list <- ["hmp", "qmp", "qmp_events", "tools"] do
       names = Enum.map(c[list], & &1["name"])
       assert names == Enum.uniq(names), "#{list} has repeated names"
     end
@@ -66,6 +66,21 @@ defmodule QemuAdmin.TerminalCatalogTest do
     for name <- ~w(system_powerdown system_reset stop cont quit eject query-status screendump) do
       assert qmp[name] || c["hmp"] |> Enum.any?(&(&1["name"] == name)), name
     end
+  end
+
+  test "the tools that need no VM: qemu-img's commands, qemu-io and the qemu-system helps", %{catalog: c} do
+    tools = Map.new(c["tools"], &{&1["name"], &1})
+
+    for sub <- ~w(create info convert resize snapshot check) do
+      assert %{"description" => d} = tools["qemu-img #{sub}"], sub
+      assert d != ""
+    end
+
+    assert tools["qemu-img create"]["usage"] =~ "FILE"
+    assert tools["qemu-img"]["usage"] =~ "COMMAND"
+    assert tools["qemu-io"]["usage"] =~ "-c"
+    assert %{"emulators" => ["arm"]} = tools["qemu-system-arm -machine help"]
+    assert tools["qemu-system-x86_64 -cpu help"]
   end
 
   test "the events", %{catalog: c} do

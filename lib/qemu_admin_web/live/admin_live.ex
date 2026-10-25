@@ -50,6 +50,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdmin.Raspi.Image, as: RaspiImage
   alias QemuAdmin.Esp32.Flash, as: EspFlash
   alias QemuAdmin.Qemu.{Img, InstallJob}
+  alias QemuAdmin.Terminal, as: TermTools
   alias QemuAdmin.Vm.Args
   alias QemuAdminWeb.Files
 
@@ -635,20 +636,47 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
+  # What is typed in the Terminal: a QEMU tool (qemu-img…) runs with the VM on
+  # or off; a monitor or QMP command needs it running. Everything shows in the
+  # history (`TermTools.log/3`; the VmServer logs what it sends by itself).
   def handle_event("cmd_send", %{"cmd" => input}, socket) do
-    case current(socket) do
-      {vm, _rt} ->
-        # the answer is in the history (the VmServer logs it and broadcasts it)
-        case VmServer.console(vm.id, input) do
-          {:error, msg} when is_binary(msg) and msg != "" ->
-            {:noreply, put_flash(socket, :error, "Terminal: #{msg}")}
+    with {vm, rt} <- current(socket), input when input != "" <- String.trim(input) do
+      case TermTools.route(input) do
+        {:tool, _name} ->
+          TermTools.log(vm.id, "tool", input)
+          key = {:tool, vm.id, System.unique_integer([:positive])}
+          {:noreply, start_async(socket, key, fn -> TermTools.run(vm, input) end)}
 
-          _ ->
+        {:error, msg} ->
+          TermTools.log(vm.id, "typed", input)
+          TermTools.log(vm.id, "error", msg)
+          {:noreply, socket}
+
+        :monitor ->
+          if running?(rt) do
+            # the answer is in the history (the VmServer logs it and broadcasts it)
+            case VmServer.console(vm.id, input) do
+              {:error, msg} when is_binary(msg) and msg != "" ->
+                {:noreply, put_flash(socket, :error, "Terminal: #{msg}")}
+
+              _ ->
+                {:noreply, socket}
+            end
+          else
+            TermTools.log(vm.id, "typed", input)
+
+            TermTools.log(
+              vm.id,
+              "error",
+              "a VM está desligada: os comandos do monitor e do QMP só valem com ela ligada. " <>
+                "Já dá para usar qemu-img, qemu-io e qemu-system-* -machine help (-cpu help, -version…)."
+            )
+
             {:noreply, socket}
-        end
-
-      nil ->
-        {:noreply, socket}
+          end
+      end
+    else
+      _ -> {:noreply, socket}
     end
   end
 
@@ -823,6 +851,26 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("vnc_title", _params, socket), do: {:noreply, socket}
 
   @impl true
+  # a QEMU tool finished (TermTools.run/2): its output goes to the history, and the
+  # page reloads what the tool may have changed (a disk made, resized…)
+  def handle_async({:tool, id, _n}, {:ok, result}, socket) do
+    case result do
+      {:ok, output, status} ->
+        TermTools.log(id, "received", if(output == "", do: "(sem saída)", else: output))
+        if status != 0, do: TermTools.log(id, "error", "saiu com o código #{status}")
+
+      {:error, msg} ->
+        TermTools.log(id, "error", msg)
+    end
+
+    {:noreply, prepare_view(socket)}
+  end
+
+  def handle_async({:tool, id, _n}, {:exit, reason}, socket) do
+    TermTools.log(id, "error", "o comando falhou: #{inspect(reason)}")
+    {:noreply, socket}
+  end
+
   def handle_async(:shutdown, _result, socket) do
     {:noreply, push_event(socket, "qa:close-window", %{})}
   end
@@ -1062,7 +1110,7 @@ defmodule QemuAdminWeb.AdminLive do
   end
 
   # What the prompt's arrow keys recall: what was typed or sent, without repeats in a row.
-  defp history_add(history, %{dir: dir, text: text}) when dir in ["hmp", "sent"] do
+  defp history_add(history, %{dir: dir, text: text}) when dir in ["hmp", "sent", "tool", "typed"] do
     if List.last(history) == text, do: history, else: Enum.take(history ++ [text], -100)
   end
 

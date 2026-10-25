@@ -13,6 +13,7 @@ python tools/gen_qemu_catalog.py
 ## O que tem (QEMU 11.1.0; o do ESP32 é o 9.2.2)
 | Lista | Itens | O que é |
 | --- | --- | --- |
+| `tools` | 65 | as **ferramentas** que não precisam da VM: os 15 comandos do `qemu-img` (uso e descrição vêm do próprio `--help`), o `qemu-io` e, para cada emulador, `qemu-system-<arq> -machine help`, `-cpu help`, `-device help`, `-accel help`, `-display help`, `-netdev help`, `-object help` e `-version` (descrições em português, escritas no gerador) |
 | `hmp` | 179 | comandos do **monitor**, digitados como estão (`info registers`, `stop`, `drive_add`…). 70 são do grupo `info`. Cada um com `usage`, `description` e `aliases` (`stop` → `s`) |
 | `qmp` | 240 | comandos do **protocolo de máquina**, enviados em JSON `{"execute": nome, "arguments": {...}}`. Cada um com `description`, `since`, `returns` e `arguments` (`name`, `type`, `required`, `description`, `values` nos enums) |
 | `qmp_events` | 57 | eventos que o QEMU envia (`STOP`, `SHUTDOWN`…), com os campos de `data` |

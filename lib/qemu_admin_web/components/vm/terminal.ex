@@ -11,6 +11,10 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   As one types, the prompt suggests commands, with their usage and
   description, from `priv/terminal/commands.json` (the `CmdInput` hook).
 
+  The prompt is always on: a QEMU tool (`qemu-img`, `qemu-io`, `qemu-system-*
+  -machine help`…) runs with the VM off or on (`QemuAdmin.Terminal`), and the
+  monitor and QMP commands go to the VM when it is running.
+
   The entries are a stream (`@streams.cmds`); the times come as UTC and the
   `CmdLog` hook shows them in the local zone. The launch line can be edited
   there (`edit`: nil or `%{text:, error:}`): what is saved is the VM's own
@@ -43,6 +47,8 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   prop exe, :string, default: ""
 
   defp prefix("launch"), do: "$"
+  defp prefix("tool"), do: "$"
+  defp prefix("typed"), do: "›"
   defp prefix("sent"), do: "›"
   defp prefix("hmp"), do: "(qemu)"
   defp prefix("received"), do: "‹"
@@ -51,6 +57,8 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   defp prefix(_), do: " "
 
   defp tone("launch"), do: "text-base-content/45"
+  defp tone("tool"), do: "text-primary"
+  defp tone("typed"), do: "text-base-content/55"
   defp tone("sent"), do: "text-primary"
   defp tone("hmp"), do: "text-primary"
   defp tone("received"), do: "text-base-content/80"
@@ -162,7 +170,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             <span class="min-w-0 flex-1 whitespace-pre-wrap break-all">{e.text}</span>
           </div>
           <div id="vm-cmds-empty" class="hidden only:block text-base-content/35">
-            Nada ainda. Ligue a VM e digite um comando abaixo.
+            Nada ainda. Digite um comando abaixo.
           </div>
         </div>
         <form id="cmd-form" phx-submit="cmd_send" class="relative flex items-center gap-2 px-3 py-2" autocomplete="off">
@@ -179,19 +187,17 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             type="text"
             phx-hook="CmdInput"
             data-history={Jason.encode!(@history)}
-            disabled={stopped?(@rt)}
             spellcheck="false"
             placeholder={
               if stopped?(@rt),
-                do: "Ligue a VM para enviar comandos",
-                else: ~s(info status · info registers · {"execute": "query-status"})
+                do: "qemu-img info disco.qcow2 · qemu-system-arm -machine help · (monitor e QMP: com a VM ligada)",
+                else: ~s(info registers · {"execute": "query-status"} · qemu-img info disco.qcow2)
             }
             class="qa-field min-w-0 flex-1 font-mono !text-xs"
           />
           <button
             type="submit"
             id="cmd-send"
-            disabled={stopped?(@rt)}
             class="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-content hover:brightness-110 disabled:opacity-40"
           >
             Enviar

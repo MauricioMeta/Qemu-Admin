@@ -3,7 +3,10 @@
 
 What the installed QEMU tells about itself, for each emulator found:
   * the monitor (HMP) commands, with usage and description, from `help` and `help info`;
-  * the QMP commands and events, with their arguments, types and results, from `query-qmp-schema`.
+  * the QMP commands and events, with their arguments, types and results, from `query-qmp-schema`;
+  * the tools that need no VM (what the Terminal runs with the VM off): the commands of `qemu-img`
+    (usage and description from its own `--help`), `qemu-io`, and the introspection of each
+    `qemu-system-*` (`-machine help`, `-cpu help`, `-version`…).
 What it does not tell, the descriptions of the QMP commands, arguments and events, comes from
 the doc comments of QEMU's own QAPI schema (qapi/*.json, same version, from the official repository).
 
@@ -144,6 +147,55 @@ def resolve_schema(schema):
         elif e["meta-type"] == "event":
             events[e["name"]] = {"data": members(e["arg-type"]) if e.get("arg-type") else []}
     return commands, events
+
+
+# ------------------------------------------------------------------------- the tools
+
+# What `qemu-system-* <option>` lists, in the words of the page.
+SYSTEM_HELPS = [
+    ("-machine help", "Lista as máquinas (placas) que este emulador sabe emular."),
+    ("-cpu help", "Lista os modelos de CPU que este emulador sabe emular."),
+    ("-device help", "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um)."),
+    ("-accel help", "Lista os aceleradores disponíveis (tcg, whpx, kvm…)."),
+    ("-display help", "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…)."),
+    ("-netdev help", "Lista os tipos de rede (user, tap, socket…)."),
+    ("-object help", "Lista os objetos que se pode criar (memória, segredos, backends…)."),
+    ("-version", "Mostra a versão do emulador."),
+]
+
+
+def probe_tools(qemu_dir, exes):
+    """qemu-img's commands (usage and description from `--help`), qemu-io and the qemu-system-* helps."""
+    tools = []
+    img = next((os.path.join(qemu_dir, f) for f in ("qemu-img.exe", "qemu-img")
+                if os.path.isfile(os.path.join(qemu_dir, f))), None)
+    if img:
+        def run(*args):
+            return subprocess.run([img, *args], capture_output=True, text=True, encoding="utf-8",
+                                  errors="replace").stdout
+
+        help_text = run("--help")
+        section = help_text.split("Recognized commands", 1)[-1].split("Supported image formats")[0]
+        for name, desc in re.findall(r"^\s+([\w-]+) - (.+)$", section, re.M):
+            usage = run(name, "--help").split("Usage:", 1)[-1].split("\n\n", 1)[0]
+            usage = re.sub(r"\s+", " ", usage).strip()
+            usage = re.sub(r"^qemu-img " + re.escape(name) + r"\s*", "", usage)
+            tools.append({"name": f"qemu-img {name}", "usage": usage, "description": desc.strip(),
+                          "emulators": []})
+        tools.append({"name": "qemu-img", "usage": "COMMAND [opções]",
+                      "description": "Utilitário de imagens de disco do QEMU: criar, inspecionar, converter, redimensionar, "
+                                     "tirar snapshots… (qemu-img COMMAND --help mostra a ajuda de um comando).",
+                      "emulators": []})
+    io = any(os.path.isfile(os.path.join(qemu_dir, f)) for f in ("qemu-io.exe", "qemu-io"))
+    if io:
+        tools.append({"name": "qemu-io", "usage": "[-f FMT] -c COMANDO [-c COMANDO]... ARQUIVO",
+                      "description": "Exercita uma imagem de disco: lê, escreve e consulta blocos (use -c; "
+                                     "sem -c ele seria interativo).",
+                      "emulators": []})
+    for arch in exes:
+        for opt, desc in SYSTEM_HELPS:
+            tools.append({"name": f"qemu-system-{arch} {opt}", "usage": "", "description": desc, "emulators": [arch]})
+    return sorted(tools, key=lambda t: t["name"])
 
 
 # ------------------------------------------------------------ the docs (QAPI sources)
@@ -356,11 +408,13 @@ def main():
         "emulator_versions": versions,
         "generated": datetime.date.today().isoformat(),
         "about": (
-            "Todos os comandos do QEMU: 'hmp' são os comandos do monitor (digitados como estão, "
+            "Todos os comandos do QEMU: 'tools' são as ferramentas que não precisam da VM ligada "
+            "(qemu-img, qemu-io, qemu-system-* -machine help…); 'hmp' são os comandos do monitor (digitados como estão, "
             "ex.: info registers); 'qmp' são os comandos do protocolo de máquina, enviados como "
             "JSON {\"execute\": nome, \"arguments\": {...}}; 'qmp_events' são os eventos que o QEMU envia. "
             "Gerado por tools/gen_qemu_catalog.py a partir do QEMU instalado e dos comentários do QAPI."
         ),
+        "tools": probe_tools(args.qemu, exes),
         "hmp": hmp_list,
         "qmp": qmp,
         "qmp_events": events,

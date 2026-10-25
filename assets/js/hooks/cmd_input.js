@@ -5,7 +5,8 @@
 //  * Suggestions: as you type, the commands of QEMU (priv/terminal/commands.json,
 //    served at /terminal/commands.json) that fit, each with its usage and
 //    description — monitor commands (`info registers`), QMP commands (picked in
-//    the plain prompt they become `{"execute": "..."}`) and, inside a QMP
+//    the plain prompt they become `{"execute": "..."}`), the QEMU tools that need
+//    no VM running (qemu-img, qemu-io, qemu-system-* -machine help…) and, inside a QMP
 //    message, the command's names and arguments. ↑/↓ choose, Tab accepts, Esc
 //    closes, Enter sends what is typed (or accepts, once an item was chosen
 //    with the arrows); a click accepts too.
@@ -39,11 +40,18 @@ function prepare(c) {
     since: e.since,
     returns: e.returns,
   }))
-  // every way of calling a monitor command, longest first, for the usage hint
-  const hmpNames = hmp
+  const tools = (c.tools || []).map((e) => ({
+    kind: "tool",
+    name: e.name,
+    usage: e.usage || "",
+    description: e.description || "",
+    aliases: [],
+  }))
+  // every way of calling a monitor command or a tool, longest first, for the usage hint
+  const hmpNames = [...hmp, ...tools]
     .flatMap((e) => [e.name, ...e.aliases].map((n) => [n.toLowerCase(), e]))
     .sort((a, b) => b[0].length - a[0].length)
-  return {hmp, qmp, hmpNames, byQmp: new Map(qmp.map((e) => [e.name, e]))}
+  return {hmp, tools, qmp, hmpNames, byQmp: new Map(qmp.map((e) => [e.name, e]))}
 }
 
 // ------------------------------------------------------------- suggestions
@@ -82,6 +90,11 @@ function suggest(cat, text) {
     }
   }
   items.sort((a, b) => rank(a.entry, p) - rank(b.entry, p) || a.entry.name.localeCompare(b.entry.name))
+
+  // the QEMU tools, which run with the VM off
+  for (const e of cat.tools) {
+    if (e.name.toLowerCase().startsWith(p)) items.push({entry: e, apply: applyHmp(e)})
+  }
 
   // QMP commands, for a single word: names that start with it, then that contain it
   if (!/\s/.test(p) && p.length >= 2) {
@@ -166,7 +179,8 @@ function describe(entry) {
   }
 
   const head = el("div", "font-mono text-primary", entry.name)
-  if (entry.kind === "hmp" && entry.usage) head.append(el("span", "ml-2 text-base-content/60", entry.usage))
+  if ((entry.kind === "hmp" || entry.kind === "tool") && entry.usage)
+    head.append(el("span", "ml-2 text-base-content/60", entry.usage))
   box.append(head)
   box.append(el("div", "", entry.description || "sem descrição na documentação do QEMU"))
 
@@ -333,12 +347,18 @@ export const CmdInput = {
           el(
             "span",
             "shrink-0 rounded px-1 text-[0.58rem] uppercase " +
-              (e.kind === "qmp" ? "bg-info/15 text-info" : e.kind === "arg" ? "bg-warning/15 text-warning" : "bg-success/15 text-success"),
-            e.kind === "qmp" ? "QMP" : e.kind === "arg" ? "arg" : "monitor",
+              (e.kind === "qmp"
+                ? "bg-info/15 text-info"
+                : e.kind === "arg"
+                  ? "bg-warning/15 text-warning"
+                  : e.kind === "tool"
+                    ? "bg-secondary/15 text-secondary"
+                    : "bg-success/15 text-success"),
+            e.kind === "qmp" ? "QMP" : e.kind === "arg" ? "arg" : e.kind === "tool" ? "ferramenta" : "monitor",
           ),
         )
         const desc = e.kind === "arg" ? e.arg.description || "" : e.description
-        const usage = e.kind === "hmp" && e.usage ? e.usage + "  " : ""
+        const usage = (e.kind === "hmp" || e.kind === "tool") && e.usage ? e.usage + "  " : ""
         row.append(el("span", "min-w-0 flex-1 truncate text-base-content/55", usage + desc))
         // mousedown, not click: the input must keep the focus
         row.addEventListener("mousedown", (ev) => {

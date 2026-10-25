@@ -153,6 +153,15 @@ defmodule QemuAdmin.VmServer do
     end
   end
 
+  @doc """
+  Adds an entry to the history of the run (`QemuAdmin.Terminal.log/3` does it
+  for a VM that is off): `:ok` or `{:error, :not_running}`.
+  """
+  def log_command(id, dir, text), do: call(id, {:log_cmd, dir, text}) |> only_ok()
+
+  defp only_ok(:ok), do: :ok
+  defp only_ok(_), do: {:error, :not_running}
+
   def commands_path(id), do: Path.join(QemuAdmin.Paths.vm_dir(id), "commands.log")
 
   defp commands_file(id) do
@@ -319,6 +328,9 @@ defmodule QemuAdmin.VmServer do
   end
 
   def handle_call(:commands, _from, state), do: {:reply, :queue.to_list(state.cmds), state}
+
+  def handle_call({:log_cmd, dir, text}, _from, state),
+    do: {:reply, :ok, log_cmd(state, dir, text)}
 
   def handle_call(:log, _from, state), do: {:reply, :queue.to_list(state.log), state}
   def handle_call(:command_line, _from, state), do: {:reply, state.command, state}

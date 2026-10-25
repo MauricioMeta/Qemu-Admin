@@ -20,6 +20,7 @@ Nada foi implementado em 2026-10-25 além do que está em [[Estado do Projeto]];
 - [ ] **Organizar o pacote de 2012** — `Workspace_Qemu/vms/qemu` (QEMU antigo + Wheezy) está dentro de `vms/`; mover para fora do workspace. Ver [[Pacote RPi QEMU 2012]].
 - [x] **Terminal** — o painel de comandos passou a se chamar Terminal; catálogo de todos os comandos do QEMU gerado ([[Catalogo de comandos]]).
 - [x] **Terminal: sugestões ao digitar** — feito; ver [[Terminal]].
+- [x] **Terminal sem a VM ligada** — qemu-img, qemu-io e `qemu-system-* -machine help` rodam com a VM desligada; ver [[Terminal]].
 - [ ] **Terminal: comandos salvos** (ex.: `start`, em um arquivo JSON) — ver [[Terminal]].
 - [ ] **Limpar settings** — o `settings.json` da pasta de dados pode guardar workspaces temporários na lista de recentes.
 

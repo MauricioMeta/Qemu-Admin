@@ -10,7 +10,495 @@
   "xtensa": "9.2.2"
  },
  "generated": "2026-10-25",
- "about": "Todos os comandos do QEMU: 'hmp' são os comandos do monitor (digitados como estão, ex.: info registers); 'qmp' são os comandos do protocolo de máquina, enviados como JSON {\"execute\": nome, \"arguments\": {...}}; 'qmp_events' são os eventos que o QEMU envia. Gerado por tools/gen_qemu_catalog.py a partir do QEMU instalado e dos comentários do QAPI.",
+ "about": "Todos os comandos do QEMU: 'tools' são as ferramentas que não precisam da VM ligada (qemu-img, qemu-io, qemu-system-* -machine help…); 'hmp' são os comandos do monitor (digitados como estão, ex.: info registers); 'qmp' são os comandos do protocolo de máquina, enviados como JSON {\"execute\": nome, \"arguments\": {...}}; 'qmp_events' são os eventos que o QEMU envia. Gerado por tools/gen_qemu_catalog.py a partir do QEMU instalado e dos comentários do QAPI.",
+ "tools": [
+  {
+   "name": "qemu-img",
+   "usage": "COMMAND [opções]",
+   "description": "Utilitário de imagens de disco do QEMU: criar, inspecionar, converter, redimensionar, tirar snapshots… (qemu-img COMMAND --help mostra a ajuda de um comando).",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img amend",
+   "usage": "-o FMT_OPTS [-f FMT | --image-opts] [-t CACHE] [--force] [-p] [-q] [--object OBJDEF] FILE",
+   "description": "Update format-specific options of the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img bench",
+   "usage": "[-f FMT | --image-opts] [-t CACHE] [-c COUNT] [-d DEPTH] [-o OFFSET] [-s BUFFER_SIZE] [-S STEP_SIZE] [-w [--pattern PATTERN] [--flush-interval INTERVAL [--no-drain]]] [-i AIO] [-n] [-U] [-q] FILE",
+   "description": "Run a simple image benchmark",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img bitmap",
+   "usage": "[-f FMT | --image-opts] ( --add [-g SIZE] | --remove | --remove-all | --clear | --enable | --disable | --merge SOURCE [-b SRC_FILE [-F SRC_FMT]] ).. [--object OBJDEF] FILE [BITMAP]",
+   "description": "Perform modifications of the persistent bitmap in the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img check",
+   "usage": "[-f FMT | --image-opts] [-T CACHE_MODE] [-r leaks|all] [-U] [--output human|json] [-q] [--object OBJDEF] FILE",
+   "description": "Check basic image integrity",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img commit",
+   "usage": "[-f FMT | --image-opts] [-t CACHE_MODE] [-b BASE_IMG] [-d] [-r RATE] [-q] [--object OBJDEF] FILE",
+   "description": "Commit image to its backing file",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img compare",
+   "usage": "[[-f FMT] [-F FMT] | --image-opts] [-s] [-T CACHE] [-U] [-p] [-q] [--object OBJDEF] FILE1 FILE2",
+   "description": "Check if two images have the same contents",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img convert",
+   "usage": "[-f SRC_FMT | --image-opts] [-T SRC_CACHE] [-l SNAPSHOT] [--bitmaps [--skip-broken-bitmaps]] [--salvage] [-O TGT_FMT | --target-image-opts] [-o TGT_FMT_OPTS] [-t TGT_CACHE] [-b BACKING_FILE [-F BACKING_FMT]] [-S SPARSE_SIZE] [-n] [--target-is-zero] [-c] [-U] [-r RATE] [-m NUM_PARALLEL] [-W] [-C] [-p] [-q] [--object OBJDEF] SRC_FILE [SRC_FILE2...] TGT_FILE",
+   "description": "Copy one or more images to another with optional format conversion",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img create",
+   "usage": "[-f FMT] [-o FMT_OPTS] [-b BACKING_FILE [-B BACKING_FMT]] [-u] [-q] [--object OBJDEF] FILE [SIZE]",
+   "description": "Create and format a new image file",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img dd",
+   "usage": "[-f FMT|--image-opts] [-O OUTPUT_FMT] [-U] [--object OBJDEF] [bs=BLOCK_SIZE] [count=BLOCKS] if=INPUT of=OUTPUT",
+   "description": "Copy input to output with optional format conversion",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img info",
+   "usage": "[-f FMT | --image-opts] [--backing-chain] [-U] [--output human|json] [--object OBJDEF] FILE",
+   "description": "Display information about the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img map",
+   "usage": "[-f FMT | --image-opts] [--start-offset OFFSET] [--max-length LENGTH] [--output human|json] [-U] [--object OBJDEF] FILE",
+   "description": "Dump image metadata",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img measure",
+   "usage": "[-f FMT|--image-opts] [-l SNAPSHOT] [-O TARGET_FMT] [-o TARGET_FMT_OPTS] [--output human|json] [--object OBJDEF] (--size SIZE | FILE)",
+   "description": "Calculate the file size required for a new image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img rebase",
+   "usage": "[-f FMT | --image-opts] [-t CACHE] [-b BACKING_FILE [-B BACKING_FMT] [-T BACKING_CACHE]] [-u] [-c] [-U] [-p] [-q] [--object OBJDEF] FILE",
+   "description": "Change the backing file of the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img resize",
+   "usage": "[-f FMT | --image-opts] [--preallocation PREALLOC] [--shrink] [-q] [--object OBJDEF] FILE [+-]SIZE[bkKMGTPE]",
+   "description": "Resize the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-img snapshot",
+   "usage": "[-f FMT | --image-opts] [-l | -a|-c|-d SNAPSHOT] [-U] [-q] [--object OBJDEF] FILE",
+   "description": "List or manipulate snapshots in the image",
+   "emulators": []
+  },
+  {
+   "name": "qemu-io",
+   "usage": "[-f FMT] -c COMANDO [-c COMANDO]... ARQUIVO",
+   "description": "Exercita uma imagem de disco: lê, escreve e consulta blocos (use -c; sem -c ele seria interativo).",
+   "emulators": []
+  },
+  {
+   "name": "qemu-system-aarch64 -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-aarch64 -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "aarch64"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-arm -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "arm"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-avr -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "avr"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-i386 -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "i386"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-x86_64 -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "x86_64"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -accel help",
+   "usage": "",
+   "description": "Lista os aceleradores disponíveis (tcg, whpx, kvm…).",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -cpu help",
+   "usage": "",
+   "description": "Lista os modelos de CPU que este emulador sabe emular.",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -device help",
+   "usage": "",
+   "description": "Lista os dispositivos que se pode ligar à máquina (-device nome,help mostra as propriedades de um).",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -display help",
+   "usage": "",
+   "description": "Lista as formas de mostrar a tela (sdl, gtk, vnc, none…).",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -machine help",
+   "usage": "",
+   "description": "Lista as máquinas (placas) que este emulador sabe emular.",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -netdev help",
+   "usage": "",
+   "description": "Lista os tipos de rede (user, tap, socket…).",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -object help",
+   "usage": "",
+   "description": "Lista os objetos que se pode criar (memória, segredos, backends…).",
+   "emulators": [
+    "xtensa"
+   ]
+  },
+  {
+   "name": "qemu-system-xtensa -version",
+   "usage": "",
+   "description": "Mostra a versão do emulador.",
+   "emulators": [
+    "xtensa"
+   ]
+  }
+ ],
  "hmp": [
   {
    "name": "announce_self",
