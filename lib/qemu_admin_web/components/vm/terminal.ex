@@ -117,7 +117,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
     <section
       id="vm-terminal"
       class="relative flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60"
-      style={if @open, do: "height: var(--terminal-h, 18rem)"}
+      style={if @open, do: "height: var(--terminal-h, 18rem)", else: ""}
     >
       {!-- the top edge: drag to resize the Terminal (the DockResizer hook), double click for the default --}
       <div
@@ -173,11 +173,13 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           </span>
           <button
             type="button"
-            id="saved-new"
-            phx-click="saved_new"
+            id="saved-manage"
+            phx-click="nav"
+            phx-value-view="commands"
             class="rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
+            title="Abre a página Comandos: criar, editar e excluir"
           >
-            Novo
+            Editar comandos
           </button>
           <button
             type="button"
@@ -189,9 +191,9 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           </button>
         </div>
         <p :if={@panel[:file_error]} class="text-error">{@panel[:file_error]}</p>
-        <p :if={@saved == [] and is_nil(@panel.editing)} class="text-base-content/50">
+        <p :if={@saved == []} class="text-base-content/50">
           Nenhum comando salvo. Um comando salvo é um nome (como <code class="text-primary/80">start</code>) que executa
-          uma sequência de comandos nesta VM: clique em <strong>Novo</strong>, ou edite o arquivo acima à mão.
+          uma sequência de comandos nesta VM: abra <strong>Editar comandos</strong> (ou o ícone Comandos da barra lateral), ou edite o arquivo acima à mão.
         </p>
         <ul :if={@saved != []} class="divide-y divide-primary/10 rounded border border-primary/15">
           <li :for={c <- @saved} id={"saved-#{c["name"]}"} class="flex items-center gap-2 px-2 py-1.5">
@@ -213,91 +215,8 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             >
               Executar
             </button>
-            <button
-              type="button"
-              phx-click="saved_edit"
-              phx-value-name={c["name"]}
-              class="rounded border border-base-content/20 px-2 py-0.5 text-[0.68rem] hover:bg-base-300"
-            >
-              Editar
-            </button>
-            <button
-              type="button"
-              phx-click="saved_delete"
-              phx-value-name={c["name"]}
-              data-confirm={"Excluir o comando salvo #{c["name"]}?"}
-              class="rounded border border-error/30 px-2 py-0.5 text-[0.68rem] text-error hover:bg-error/10"
-            >
-              Excluir
-            </button>
           </li>
         </ul>
-        <form
-          :if={@panel.editing}
-          id="saved-form"
-          phx-change="saved_change"
-          phx-submit="saved_save"
-          class="space-y-2 rounded border border-primary/20 bg-base-300/30 p-2"
-          autocomplete="off"
-        >
-          <div class="grid grid-cols-2 gap-2">
-            <div>
-              <label class="qa-label" for="saved_name">Nome (uma palavra)</label>
-              <input id="saved_name" name="saved[name]" value={@panel.editing["name"]} class="qa-field font-mono" placeholder="start" phx-debounce="300" />
-            </div>
-            <div>
-              <label class="qa-label" for="saved_vm">Vale para</label>
-              <select id="saved_vm" name="saved[vm]" class="qa-field">
-                <option value="" selected={@panel.editing["vm"] in [nil, ""]}>Todas as VMs</option>
-                <option value={@vm.id} selected={@panel.editing["vm"] == @vm.id}>Só esta VM ({@vm.name})</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label class="qa-label" for="saved_description">Descrição</label>
-            <input id="saved_description" name="saved[description]" value={@panel.editing["description"]} class="qa-field" placeholder="Liga a VM e mostra o estado" phx-debounce="300" />
-          </div>
-          <div>
-            <label class="qa-label" for="saved_steps">Passos (um por linha, executados em ordem)</label>
-            <textarea
-              id="saved_steps"
-              name="saved[steps]"
-              rows="5"
-              spellcheck="false"
-              phx-debounce="300"
-              class="qa-field font-mono !text-[0.68rem]"
-              placeholder={"@start\nqmp: query-status\nhmp: info registers\ncli: qemu-img info {dir}/disk0.qcow2"}
-            >{@panel.editing["steps"]}</textarea>
-            <p class="mt-1 text-[0.62rem] text-base-content/45">
-              Um prefixo diz como o passo chega ao QEMU:
-              <code>qmp: stop</code> (comando QMP; argumentos em JSON: <code>{"qmp: block_resize {\"device\": \"d0\", \"size\": 1048576}"}</code>),
-              <code>hmp: info registers</code> (monitor) ou
-              <code>cli: qemu-img info disk0.qcow2</code> (ferramenta do QEMU, um processo). Sem prefixo, o Terminal descobre sozinho, como quando você digita.
-              Do app: <code>@start</code> (liga a VM e espera) e <code>@wait 3</code> (segundos).
-              <code>{"{vm}"}</code>, <code>{"{name}"}</code> e <code>{"{dir}"}</code> viram o id, o nome e a pasta da VM. Linhas com # são ignoradas.
-            </p>
-          </div>
-          <label class="flex items-center gap-2">
-            <input type="hidden" name="saved[continue_on_error]" value="false" />
-            <input
-              type="checkbox"
-              name="saved[continue_on_error]"
-              value="true"
-              checked={@panel.editing["continue_on_error"] == true}
-              class="checkbox checkbox-xs checkbox-primary"
-            />
-            Seguir para o próximo passo mesmo se um falhar
-          </label>
-          <p :if={@panel.error} class="text-error">{@panel.error}</p>
-          <div class="flex gap-2">
-            <button type="submit" id="saved-save" class="rounded-md bg-primary px-3 py-1 font-semibold text-primary-content hover:brightness-110">
-              Salvar
-            </button>
-            <button type="button" id="saved-cancel" phx-click="saved_cancel" class="rounded-md border border-base-content/20 px-3 py-1 hover:bg-base-300">
-              Cancelar
-            </button>
-          </div>
-        </form>
       </section>
       <form
         :if={@open and @edit}

@@ -68,6 +68,7 @@ defmodule QemuAdminWeb.AdminLive do
 
   alias QemuAdminWeb.Components.Files.Picker
   alias QemuAdminWeb.Components.Pages.{Disks, SettingsNav}
+  alias QemuAdminWeb.Components.Pages.Commands, as: CommandsPage
   alias QemuAdminWeb.Components.Pages.Images, as: ImagesPage
   alias QemuAdminWeb.Components.Pages.Qemu, as: QemuPage
   alias QemuAdminWeb.Components.Pages.Settings, as: SettingsPage
@@ -143,6 +144,7 @@ defmodule QemuAdminWeb.AdminLive do
     "disks" => "Discos",
     "images" => "Imagens",
     "qemu" => "QEMU",
+    "commands" => "Comandos",
     "settings" => "Configurações"
   }
 
@@ -200,7 +202,10 @@ defmodule QemuAdminWeb.AdminLive do
        cmd_groups: %{},
        cmd_edit: nil,
        saved: [],
-       saved_panel: nil
+       saved_panel: nil,
+       cp: %{editing: nil, error: nil},
+       cp_commands: [],
+       cp_file_error: nil
      )
      |> stream_configure(:log, dom_id: &"log-#{&1.id}")
      |> stream(:log, [])
@@ -241,6 +246,9 @@ defmodule QemuAdminWeb.AdminLive do
          install: InstallJob.state(:qemu),
          install_esp: InstallJob.state(:esp)
        )}
+
+  def handle_event("nav", %{"view" => "commands"}, socket),
+    do: {:noreply, socket |> assign(view: "commands", mode: nil) |> load_commands()}
 
   def handle_event("nav", %{"view" => "settings"}, socket),
     do: {:noreply, assign(socket, view: "settings", mode: nil)}
@@ -664,16 +672,17 @@ defmodule QemuAdminWeb.AdminLive do
   # ---- the saved commands panel (`terminal.json`)
 
   def handle_event("saved_open", _params, socket),
-    do: {:noreply, socket |> assign(saved_panel: %{editing: nil, error: nil}, cmds_open: true) |> load_saved()}
+    do: {:noreply, socket |> assign(saved_panel: %{error: nil}, cmds_open: true) |> load_saved()}
 
   def handle_event("saved_close", _params, socket), do: {:noreply, assign(socket, saved_panel: nil)}
 
-  def handle_event("saved_new", _params, socket) do
-    {:noreply, update(socket, :saved_panel, &%{&1 | editing: blank_saved(), error: nil})}
-  end
+  # ---- the Comandos page: every saved command, to create, edit and delete
 
-  def handle_event("saved_edit", %{"name" => name}, socket) do
-    case Enum.find(socket.assigns.saved, &(&1["name"] == name)) do
+  def handle_event("cp_new", _params, socket),
+    do: {:noreply, update(socket, :cp, &%{&1 | editing: blank_saved(), error: nil})}
+
+  def handle_event("cp_edit", %{"name" => name}, socket) do
+    case Enum.find(socket.assigns.cp_commands, &(&1["name"] == name)) do
       nil ->
         {:noreply, socket}
 
@@ -687,25 +696,29 @@ defmodule QemuAdminWeb.AdminLive do
           "continue_on_error" => c["continue_on_error"]
         }
 
-        {:noreply, update(socket, :saved_panel, &%{&1 | editing: form, error: nil})}
+        {:noreply, update(socket, :cp, &%{&1 | editing: form, error: nil})}
     end
   end
 
-  def handle_event("saved_change", %{"saved" => params}, %{assigns: %{saved_panel: %{editing: form}}} = socket)
+  def handle_event("cp_change", %{"saved" => params}, %{assigns: %{cp: %{editing: form}}} = socket)
       when is_map(form) do
-    form = form |> Map.merge(Map.take(params, ~w(name description vm steps))) |> Map.put("continue_on_error", params["continue_on_error"] in ["true", "on"])
-    {:noreply, update(socket, :saved_panel, &%{&1 | editing: form})}
+    form =
+      form
+      |> Map.merge(Map.take(params, ~w(name description vm steps)))
+      |> Map.put("continue_on_error", params["continue_on_error"] in ["true", "on"])
+
+    {:noreply, update(socket, :cp, &%{&1 | editing: form})}
   end
 
-  def handle_event("saved_change", _params, socket), do: {:noreply, socket}
+  def handle_event("cp_change", _params, socket), do: {:noreply, socket}
 
-  def handle_event("saved_cancel", _params, socket),
-    do: {:noreply, update(socket, :saved_panel, &%{&1 | editing: nil, error: nil})}
+  def handle_event("cp_cancel", _params, socket),
+    do: {:noreply, update(socket, :cp, &%{&1 | editing: nil, error: nil})}
 
-  def handle_event("saved_save", %{"saved" => params}, %{assigns: %{saved_panel: panel}} = socket)
-      when is_map(panel) do
+  def handle_event("cp_save", %{"saved" => params}, %{assigns: %{cp: %{editing: form} = cp}} = socket)
+      when is_map(form) do
     original =
-      case panel.editing do
+      case form do
         %{"original" => o} when o not in [nil, ""] -> o
         _ -> nil
       end
@@ -714,22 +727,21 @@ defmodule QemuAdminWeb.AdminLive do
          :ok <- Saved.save(command, original) do
       {:noreply,
        socket
-       |> load_saved()
-       |> assign(saved_panel: %{editing: nil, error: nil})
-       |> load_saved()
+       |> assign(cp: %{cp | editing: nil, error: nil})
+       |> load_commands()
        |> put_flash(:info, "Comando salvo: #{command["name"]}")}
     else
       {:error, msg} ->
-        form = Map.merge(panel.editing || %{}, Map.take(params, ~w(name description vm steps)))
-        {:noreply, assign(socket, saved_panel: %{panel | editing: form, error: msg})}
+        form = Map.merge(form, Map.take(params, ~w(name description vm steps)))
+        {:noreply, assign(socket, cp: %{cp | editing: form, error: msg})}
     end
   end
 
-  def handle_event("saved_save", _params, socket), do: {:noreply, socket}
+  def handle_event("cp_save", _params, socket), do: {:noreply, socket}
 
-  def handle_event("saved_delete", %{"name" => name}, socket) do
+  def handle_event("cp_delete", %{"name" => name}, socket) do
     case Saved.delete(name) do
-      :ok -> {:noreply, socket |> load_saved() |> put_flash(:info, "Comando excluído: #{name}")}
+      :ok -> {:noreply, socket |> load_commands() |> put_flash(:info, "Comando excluído: #{name}")}
       {:error, msg} -> {:noreply, put_flash(socket, :error, msg)}
     end
   end
@@ -1135,7 +1147,7 @@ defmodule QemuAdminWeb.AdminLive do
       session["view"] == "vms" and session["selected"] in tabs ->
         open_vm(socket, session["selected"])
 
-      session["view"] in ~w(disks images qemu settings) ->
+      session["view"] in ~w(disks images qemu commands settings) ->
         {:noreply, socket} = handle_event("nav", %{"view" => session["view"]}, socket)
         socket
 
@@ -1220,6 +1232,17 @@ defmodule QemuAdminWeb.AdminLive do
 
       nil ->
         socket
+    end
+  end
+
+  # Every saved command (terminal.json), for the Comandos page.
+  defp load_commands(socket) do
+    case Saved.load() do
+      {:ok, commands} ->
+        assign(socket, cp_commands: Enum.sort_by(commands, &String.downcase(&1["name"])), cp_file_error: nil)
+
+      {:error, msg} ->
+        assign(socket, cp_commands: [], cp_file_error: msg)
     end
   end
 
@@ -1858,6 +1881,16 @@ defmodule QemuAdminWeb.AdminLive do
           {#elseif @view == "qemu"}
             {header_bar(assign(assigns, crumbs: ["QEMU"]))}
             <QemuPage qemu={@qemu} install={@install} install_esp={@install_esp} />
+          {#elseif @view == "commands"}
+            {header_bar(assign(assigns, crumbs: ["Comandos", "terminal.json"]))}
+            <CommandsPage
+              commands={@cp_commands}
+              vms={@vms}
+              editing={@cp.editing}
+              error={@cp.error}
+              file_error={@cp_file_error}
+              path={Saved.path()}
+            />
           {#else}
             {header_bar(
               assign(assigns, crumbs: ["Configurações", SettingsNav.section(@settings_section).label])

@@ -10,7 +10,7 @@ defmodule QemuAdmin.Session do
 
       {
         "version": 1,
-        "view": "vms",                      # the page: vms, disks, images, qemu or settings
+        "view": "vms",                      # the page: vms, disks, images, qemu, commands or settings
         "selected": "pi3",                  # the VM on screen
         "tabs": ["pi3", "netduino"],        # the open tabs, in order
         "views": {"pi3": "serial"},         # what each tab was showing
@@ -25,7 +25,7 @@ defmodule QemuAdmin.Session do
   alias QemuAdmin.Paths
 
   @file_name "session.json"
-  @pages ~w(vms disks images qemu settings)
+  @pages ~w(vms disks images qemu commands settings)
 
   @doc "Where the session is: `session.json` in the workspace."
   def path, do: Path.join(Paths.workspace_dir(), @file_name)

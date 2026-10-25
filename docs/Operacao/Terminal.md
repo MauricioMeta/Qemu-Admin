@@ -101,7 +101,9 @@ Exemplo de um comando salvo que **só** manda um QMP, para ter `parar` e `retoma
 {"name": "retomar", "description": "Retoma a VM (QMP cont)", "vm": null, "steps": ["qmp: cont"], "continue_on_error": false}
 ```
 
-**Gerenciar pela página:** o botão **Comandos salvos** (cabeçalho do Terminal) mostra o caminho do arquivo e a lista, com **Executar**, **Editar** e **Excluir**, e **Novo** abre o formulário (nome, descrição, "vale para" todas as VMs ou só esta, passos, seguir se falhar). Os comandos salvos aparecem nas sugestões ao digitar, primeiro, com a etiqueta `salvo` e a lista de passos. Se o arquivo não for um JSON válido, a lista mostra o erro e a página **não o sobrescreve**.
+**Cadastrar e editar: a página Comandos.** O ícone **Comandos** da barra lateral (`hero-command-line`, `nav-commands`) abre a página com **todos** os comandos do workspace: cada um mostra o nome, a que VM vale, a descrição e os passos numerados, cada passo com a etiqueta de como chega ao QEMU (`QMP`, `monitor`, `processo`, `app`, `auto`). **Novo comando**, **Editar** e **Excluir** ficam ali; o formulário (nome, "vale para" qualquer VM do workspace, descrição, passos, seguir se falhar) traz a explicação dos prefixos e recusa um passo inválido com o motivo, sem gravar nada. Se o arquivo não for um JSON válido, a página mostra o erro e **não o sobrescreve**. Componente `Pages.Commands`; eventos `cp_new`, `cp_edit`, `cp_change`, `cp_cancel`, `cp_save`, `cp_delete`.
+
+No Terminal de uma VM, o botão **Comandos salvos** continua como **atalho para executar**: lista os comandos que valem para aquela VM, com **Executar**, e **Editar comandos** leva à página. Os comandos salvos também aparecem nas sugestões ao digitar, primeiro, com a etiqueta `salvo` e a lista de passos.
 
 Código: `QemuAdmin.Terminal.Saved` (arquivo, validação), `QemuAdmin.Terminal.Macro` (execução) e `QemuAdmin.Terminal.execute/3` (cada passo; o terceiro argumento é a origem).
 
@@ -130,6 +132,8 @@ O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor 
 - [x] **Comandos salvos** em `terminal.json`.
 - [x] Histórico em linhas que se abrem, com a mensagem real enviada ao QEMU, a origem e o caminho (QMP, monitor, processo).
 - [x] Passos `qmp:`, `hmp:` e `cli:` nos comandos salvos.
+- [x] Página **Comandos** na barra lateral para cadastrar, editar e excluir.
+- [x] Recolher o Terminal derrubava a página (o `style` ficava `nil`); corrigido e coberto por teste.
 - [ ] Salvar a partir do histórico (um botão que transforma o que foi digitado num comando salvo).
 - [ ] Um menu "copiar" na linha aberta: a mensagem QMP pronta para colar num `curl`/script, ou a linha de comando do processo.
 - [ ] Entregar `parar`/`retomar`/`desligar` já cadastrados num `terminal.json` novo (hoje o usuário os cria).

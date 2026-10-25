@@ -36,6 +36,56 @@ defmodule QemuAdminWeb.AdminLiveTest do
     assert has_element?(view, "#tab-0", "Alpine")
   end
 
+  test "folding and unfolding the Terminal does not crash the page", %{conn: conn} do
+    {:ok, _vm} = VmStore.create(%{"name" => "Box"})
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#vm-row-box") |> render_click()
+    assert has_element?(view, "#vm-terminal")
+    assert has_element?(view, "#vm-cmds")
+
+    view |> element("#cmds-toggle") |> render_click()
+    assert has_element?(view, "#vm-terminal")
+    refute has_element?(view, "#vm-cmds")
+
+    view |> element("#cmds-toggle") |> render_click()
+    assert has_element?(view, "#vm-cmds")
+  end
+
+  test "the Comandos page: a rail icon, and creating, editing and deleting a saved command", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#nav-commands") |> render_click()
+    assert has_element?(view, "#commands-page")
+    assert render(view) =~ "Nenhum comando salvo ainda"
+
+    view |> element("#cp-new") |> render_click()
+    assert has_element?(view, "#cp-form")
+
+    # a step that cannot run is refused, with the reason, and nothing is written
+    html =
+      view
+      |> form("#cp-form", saved: %{name: "ruim", steps: "cli: info status"})
+      |> render_submit()
+
+    assert html =~ "cli: só roda as ferramentas do QEMU"
+    assert {:ok, []} = QemuAdmin.Terminal.Saved.load()
+
+    view |> form("#cp-form", saved: %{name: "parar", description: "pausa", steps: "qmp: stop"}) |> render_submit()
+    refute has_element?(view, "#cp-form")
+    assert has_element?(view, "#cp-parar", "qmp: stop")
+    assert [%{"name" => "parar", "steps" => ["qmp: stop"]}] = QemuAdmin.Terminal.Saved.list("qualquer")
+
+    view |> element("#cp-parar button[phx-click=cp_edit]") |> render_click()
+    assert has_element?(view, "#cp-form")
+    view |> form("#cp-form", saved: %{name: "pausar", steps: "qmp: stop
+hmp: info status"}) |> render_submit()
+    assert has_element?(view, "#cp-pausar")
+    refute has_element?(view, "#cp-parar")
+
+    view |> element("#cp-pausar button[phx-click=cp_delete]") |> render_click()
+    refute has_element?(view, "#cp-pausar")
+    assert {:ok, []} = QemuAdmin.Terminal.Saved.load()
+  end
+
   test "the form says what is missing", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     view |> element("#new-vm") |> render_click()
