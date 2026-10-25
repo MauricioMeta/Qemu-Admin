@@ -231,13 +231,13 @@ defmodule QemuAdmin.RenodeServer do
   # What the monitor answers comes in pieces (a character at a time, sometimes): the
   # complete lines go to the history as the "resposta" of the last command, else to the log.
   def handle_info({:tcp, socket, data}, %{monitor: socket} = state) do
-    lines = (state.mon_buf <> clean(data)) |> String.split("
+    lines = (state.mon_buf <> data) |> String.split("
 ")
     {rest, complete} = List.pop_at(lines, -1)
 
     state =
       Enum.reduce(complete, %{state | mon_buf: rest}, fn line, state ->
-        case monitor_line(line) do
+        case line |> clean() |> monitor_line() do
           "" -> state
           text when state.last_x != nil -> log_cmd(state, "received", text, %{x: state.last_x})
           text -> add_log(state, text)

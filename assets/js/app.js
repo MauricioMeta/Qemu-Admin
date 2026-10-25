@@ -10,6 +10,7 @@ import {WindowControls} from "./hooks/window_controls"
 import {TabBar} from "./hooks/tab_bar"
 import {LogTail} from "./hooks/log_tail"
 import {SerialTerm} from "./hooks/serial_term"
+import {SerialSend} from "./hooks/serial_send"
 import {CmdInput} from "./hooks/cmd_input"
 import {CmdLog} from "./hooks/cmd_log"
 import {DockResizer} from "./hooks/dock_resizer"
@@ -25,7 +26,7 @@ try {
 
 const liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: {PanelResizer, VncConsole, WindowControls, TabBar, LogTail, SerialTerm, CmdInput, CmdLog, DockResizer, SplitResizer},
+  hooks: {PanelResizer, VncConsole, WindowControls, TabBar, LogTail, SerialTerm, SerialSend, CmdInput, CmdLog, DockResizer, SplitResizer},
 })
 
 // Show progress bar on live navigation and form submits
