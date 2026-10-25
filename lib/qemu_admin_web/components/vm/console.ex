@@ -42,6 +42,8 @@ defmodule QemuAdminWeb.Components.Vm.Console do
             conectando…
           </div>
         </div>
+        {!-- a margin under the screen: its last rows are not at the Terminal's edge --}
+        <div class="h-1.5 shrink-0 bg-black/60" />
         <div id="vnc-tools" class="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-md border border-primary/20 bg-base-100/80 p-0.5 backdrop-blur">
           <button
             type="button"
