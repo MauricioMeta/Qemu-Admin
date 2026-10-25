@@ -200,9 +200,8 @@ defmodule QemuAdminWeb.AdminLive do
        cmds_open: true,
        cmd_history: [],
        cmd_groups: %{},
-       cmd_edit: nil,
+       lp: nil,
        saved: [],
-       saved_panel: nil,
        cp: %{editing: nil, error: nil},
        cp_commands: [],
        cp_file_error: nil
@@ -580,40 +579,57 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
-  def handle_event("cmds_toggle", _params, socket),
-    do: {:noreply, update(socket, :cmds_open, &(not &1))}
+  # Folded, the history is not in the page (a stream only keeps what it was sent
+  # while it was on screen): opening it again loads it from the VM.
+  def handle_event("cmds_toggle", _params, socket) do
+    socket = update(socket, :cmds_open, &(not &1))
 
-  # The launch line, edited in the terminal: `cmd_edit` is nil or
-  # `%{text:, error:}`; saving keeps it in the VM (`command`), empty restores
-  # the one the app builds.
-  def handle_event("cmd_edit", _params, socket) do
+    case current(socket) do
+      {vm, _rt} when socket.assigns.cmds_open -> {:noreply, load_cmds(socket, vm)}
+      _ -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("cmds_clear", _params, socket) do
     case current(socket) do
       {vm, _rt} ->
-        text = if vm.command in [nil, ""], do: Args.template(vm), else: vm.command
-        {:noreply, assign(socket, cmd_edit: %{text: text, error: nil}, cmds_open: true)}
+        VmServer.clear_commands(vm.id)
+        {:noreply, load_cmds(socket, vm)}
 
       nil ->
         {:noreply, socket}
     end
   end
 
-  def handle_event("cmd_edit_change", %{"text" => text}, %{assigns: %{cmd_edit: edit}} = socket)
-      when is_map(edit),
-      do: {:noreply, assign(socket, cmd_edit: %{edit | text: text})}
+  # The launch line, edited on the Comandos page: `lp` is nil or
+  # `%{id:, text:, error:}` (the VM, the text in the editor); saving keeps it in the
+  # VM (`command`), empty restores the one the app builds.
+  def handle_event("lp_edit", %{"id" => id}, socket) do
+    case find_vm(socket.assigns.vms, id) do
+      {vm, _rt} ->
+        text = if vm.command in [nil, ""], do: Args.template(vm), else: vm.command
+        {:noreply, assign(socket, lp: %{id: vm.id, text: text, error: nil})}
 
-  def handle_event("cmd_edit_change", _params, socket), do: {:noreply, socket}
+      nil ->
+        {:noreply, socket}
+    end
+  end
 
-  def handle_event("cmd_edit_cancel", _params, socket),
-    do: {:noreply, assign(socket, cmd_edit: nil)}
+  def handle_event("lp_change", %{"text" => text}, %{assigns: %{lp: lp}} = socket) when is_map(lp),
+    do: {:noreply, assign(socket, lp: %{lp | text: text})}
 
-  def handle_event("cmd_edit_reset", _params, socket) do
-    case current(socket) do
+  def handle_event("lp_change", _params, socket), do: {:noreply, socket}
+
+  def handle_event("lp_cancel", _params, socket), do: {:noreply, assign(socket, lp: nil)}
+
+  def handle_event("lp_reset", _params, %{assigns: %{lp: %{id: id}}} = socket) do
+    case find_vm(socket.assigns.vms, id) do
       {vm, _rt} ->
         VmStore.save(%{vm | command: ""})
 
         {:noreply,
          socket
-         |> assign(cmd_edit: nil)
+         |> assign(lp: nil)
          |> load_vms()
          |> refresh_command()
          |> put_flash(:info, "Linha de partida padrão restaurada")}
@@ -623,8 +639,10 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
-  def handle_event("cmd_edit_save", %{"text" => text}, socket) do
-    with {vm, _rt} <- current(socket) do
+  def handle_event("lp_reset", _params, socket), do: {:noreply, socket}
+
+  def handle_event("lp_save", %{"text" => text}, %{assigns: %{lp: %{id: id}}} = socket) do
+    with {vm, _rt} <- find_vm(socket.assigns.vms, id) do
       text = text |> String.replace(~r/\s*\R\s*/, " ") |> String.trim()
 
       # what the app builds itself is not stored: it follows the VM's settings
@@ -636,7 +654,7 @@ defmodule QemuAdminWeb.AdminLive do
 
           {:noreply,
            socket
-           |> assign(cmd_edit: nil)
+           |> assign(lp: nil)
            |> load_vms()
            |> refresh_command()
            |> put_flash(
@@ -645,12 +663,14 @@ defmodule QemuAdminWeb.AdminLive do
            )}
 
         {:error, msg} ->
-          {:noreply, assign(socket, cmd_edit: %{text: text, error: msg})}
+          {:noreply, assign(socket, lp: %{id: id, text: text, error: msg})}
       end
     else
       _ -> {:noreply, socket}
     end
   end
+
+  def handle_event("lp_save", _params, socket), do: {:noreply, socket}
 
   # What is typed in the Terminal. A saved command (its name, alone) runs its steps
   # (`Macro.run/2`); anything else is executed as typed (`TermTools.execute/2`): a
@@ -668,13 +688,6 @@ defmodule QemuAdminWeb.AdminLive do
       _ -> {:noreply, socket}
     end
   end
-
-  # ---- the saved commands panel (`terminal.json`)
-
-  def handle_event("saved_open", _params, socket),
-    do: {:noreply, socket |> assign(saved_panel: %{error: nil}, cmds_open: true) |> load_saved()}
-
-  def handle_event("saved_close", _params, socket), do: {:noreply, assign(socket, saved_panel: nil)}
 
   # ---- the Comandos page: every saved command, to create, edit and delete
 
@@ -743,15 +756,6 @@ defmodule QemuAdminWeb.AdminLive do
     case Saved.delete(name) do
       :ok -> {:noreply, socket |> load_commands() |> put_flash(:info, "Comando excluído: #{name}")}
       {:error, msg} -> {:noreply, put_flash(socket, :error, msg)}
-    end
-  end
-
-  def handle_event("saved_run", %{"name" => name}, socket) do
-    with {vm, _rt} <- current(socket), {:ok, command} <- Saved.find(name, vm.id) do
-      key = {:macro, vm.id, System.unique_integer([:positive])}
-      {:noreply, start_async(socket, key, fn -> Macro.run(vm.id, command) end)}
-    else
-      _ -> {:noreply, socket}
     end
   end
 
@@ -1218,21 +1222,19 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
-  # The saved commands (terminal.json) the selected VM has; the panel's list.
+  # The saved commands (terminal.json) the selected VM has: what the Terminal suggests.
   defp load_saved(socket) do
     case current(socket) do
-      {vm, _rt} ->
-        error = with {:error, msg} <- Saved.load(), do: msg
-        error = if is_binary(error), do: error
-        panel = socket.assigns.saved_panel
-
-        socket
-        |> assign(saved: Saved.list(vm.id))
-        |> assign(saved_panel: if(panel, do: Map.put(panel, :file_error, error)))
-
-      nil ->
-        socket
+      {vm, _rt} -> assign(socket, saved: Saved.list(vm.id))
+      nil -> socket
     end
+  end
+
+  # What each VM starts with: the line it was edited to, else the one the app builds.
+  defp launch_lines(vms) do
+    Map.new(vms, fn {vm, _rt} ->
+      {vm.id, if(vm.command in [nil, ""], do: Args.template(vm), else: vm.command)}
+    end)
   end
 
   # Every saved command (terminal.json), for the Comandos page.
@@ -1890,6 +1892,9 @@ defmodule QemuAdminWeb.AdminLive do
               error={@cp.error}
               file_error={@cp_file_error}
               path={Saved.path()}
+              lp={@lp}
+              exes={Map.new(@vms, fn {vm, _} -> {vm.id, QemuAdmin.Qemu.exe_name(vm.arch)} end)}
+              lines={launch_lines(@vms)}
             />
           {#else}
             {header_bar(
@@ -2163,11 +2168,7 @@ defmodule QemuAdminWeb.AdminLive do
       entries={@streams.cmds}
       history={@cmd_history}
       open={@cmds_open}
-      edit={@cmd_edit}
-      exe={QemuAdmin.Qemu.exe_name(@vm.arch)}
       saved={@saved}
-      panel={@saved_panel}
-      saved_path={Saved.path()}
     />
     """
   end

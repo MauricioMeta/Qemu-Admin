@@ -25,6 +25,9 @@ Não entram as consultas internas do app (a miniatura da tela a cada 5 s, a cons
 
 **Como é gravado** (`commands.log`, um JSON por linha): `seq`, `at`, `dir` (`launch`, `cmd`, `sent`, `tool`, `received`, `event`, `error`, `macro`) e `text`, mais, no que pertence a um comando, `x` (o `seq` da linha `cmd` que o abre), `src` e `via` (só na `cmd`). A dobra em linhas é feita por `QemuAdmin.Terminal.Groups`; históricos antigos, sem `x`, aparecem como linhas soltas.
 
+## Limpar e recolher
+O botão **Limpar** (cabeçalho do Terminal, com confirmação) apaga o histórico **desta VM**: o `commands.log` e o que o servidor da VM guarda (`VmServer.clear_commands/1`); a numeração segue, para não repetir um `seq`. Recolher o Terminal não apaga nada: o histórico volta ao reabrir (a página o recarrega, porque a lista não fica na tela enquanto recolhida).
+
 ## Tamanho
 O Terminal tem altura fixa (18 rem por padrão), que se **arrasta pela borda de cima** (a faixa fina com uma linha que acende ao passar o mouse; duplo clique volta ao padrão). A altura fica em `--terminal-h` no `<html>`, é guardada no navegador (`qa:terminal-h`) e aplicada antes do primeiro desenho (`root.html.heex`), como a largura do painel lateral. Hook `DockResizer` (`assets/js/hooks/dock_resizer.js`), mínimo de 120 px e máximo de 80% da janela.
 
@@ -103,12 +106,12 @@ Exemplo de um comando salvo que **só** manda um QMP, para ter `parar` e `retoma
 
 **Cadastrar e editar: a página Comandos.** O ícone **Comandos** da barra lateral (`hero-command-line`, `nav-commands`) abre a página com **todos** os comandos do workspace: cada um mostra o nome, a que VM vale, a descrição e os passos numerados, cada passo com a etiqueta de como chega ao QEMU (`QMP`, `monitor`, `processo`, `app`, `auto`). **Novo comando**, **Editar** e **Excluir** ficam ali; o formulário (nome, "vale para" qualquer VM do workspace, descrição, passos, seguir se falhar) traz a explicação dos prefixos e recusa um passo inválido com o motivo, sem gravar nada. Se o arquivo não for um JSON válido, a página mostra o erro e **não o sobrescreve**. Componente `Pages.Commands`; eventos `cp_new`, `cp_edit`, `cp_change`, `cp_cancel`, `cp_save`, `cp_delete`.
 
-No Terminal de uma VM, o botão **Comandos salvos** continua como **atalho para executar**: lista os comandos que valem para aquela VM, com **Executar**, e **Editar comandos** leva à página. Os comandos salvos também aparecem nas sugestões ao digitar, primeiro, com a etiqueta `salvo` e a lista de passos.
+O Terminal da VM não tem botões para isso: um comando salvo se executa **digitando o nome** no prompt, e aparece nas sugestões ao digitar, primeiro, com a etiqueta `salvo` e a lista de passos.
 
 Código: `QemuAdmin.Terminal.Saved` (arquivo, validação), `QemuAdmin.Terminal.Macro` (execução) e `QemuAdmin.Terminal.execute/3` (cada passo; o terceiro argumento é a origem).
 
 ## Editar a linha de partida
-O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.
+Na página **Comandos** (ícone da barra lateral), a seção **Linha de partida** lista cada VM com a linha de comando com que ela inicia (a que o app monta, ou a editada) e um botão **Editar linha de partida**, que abre um editor com os argumentos. Vale a partir do **próximo boot**. Eventos `lp_edit`, `lp_change`, `lp_save`, `lp_reset`, `lp_cancel`. O Terminal só mostra um selo "linha de partida editada" (que leva à página) quando a VM tem uma linha própria.
 
 - No lugar das portas que o app escolhe a cada início, a linha tem **marcadores**: `{qmp}`, `{serial}`, `{ws}`, `{vnc}` (o número do display VNC) e `{gdb}`. O app os troca por portas livres a cada execução.
 - **Salvar** guarda a linha no `vm.json` (campo `command`). Se o texto for igual ao padrão, nada é guardado e a VM continua seguindo as suas configurações. Um selo "linha de partida editada" aparece enquanto houver uma linha própria.
@@ -134,6 +137,8 @@ O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor 
 - [x] Passos `qmp:`, `hmp:` e `cli:` nos comandos salvos.
 - [x] Página **Comandos** na barra lateral para cadastrar, editar e excluir.
 - [x] Recolher o Terminal derrubava a página (o `style` ficava `nil`); corrigido e coberto por teste.
+- [x] Reabrir o Terminal recolhido deixava o histórico vazio; agora o recarrega. Botão **Limpar**.
+- [x] Os botões Comandos salvos e Editar linha de partida saíram do Terminal: a edição é na página Comandos.
 - [ ] Salvar a partir do histórico (um botão que transforma o que foi digitado num comando salvo).
 - [ ] Um menu "copiar" na linha aberta: a mensagem QMP pronta para colar num `curl`/script, ou a linha de comando do processo.
 - [ ] Entregar `parar`/`retomar`/`desligar` já cadastrados num `terminal.json` novo (hoje o usuário os cria).

@@ -203,6 +203,22 @@ defmodule QemuAdmin.VmServer do
 
   def commands_path(id), do: Path.join(QemuAdmin.Paths.vm_dir(id), "commands.log")
 
+  @doc """
+  Empties the Terminal's history of the VM (`commands.log` and, when it is
+  running, what the server keeps); the numbering goes on, so lines still on their
+  way do not clash with new ones.
+  """
+  def clear_commands(id) do
+    case call(id, :clear_commands) do
+      {:error, :not_running} ->
+        File.write(commands_path(id), "")
+        :ok
+
+      other ->
+        other
+    end
+  end
+
   defp commands_file(id) do
     case File.read(commands_path(id)) do
       {:ok, text} ->
@@ -390,6 +406,13 @@ defmodule QemuAdmin.VmServer do
   end
 
   def handle_call(:commands, _from, state), do: {:reply, :queue.to_list(state.cmds), state}
+
+  def handle_call(:clear_commands, _from, state) do
+    File.close(state.cmd_io)
+    File.write(commands_path(state.vm.id), "")
+    {:ok, io} = File.open(commands_path(state.vm.id), [:append, :binary])
+    {:reply, :ok, %{state | cmd_io: io, cmds: :queue.new(), last_x: nil}}
+  end
 
   def handle_call({:log_cmd, dir, text, meta}, _from, state) do
     state = log_cmd(state, dir, text, meta)

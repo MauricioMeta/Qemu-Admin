@@ -51,6 +51,45 @@ defmodule QemuAdminWeb.AdminLiveTest do
     assert has_element?(view, "#vm-cmds")
   end
 
+  test "the history is still there after folding the Terminal; Limpar empties it", %{conn: conn} do
+    {:ok, vm} = VmStore.create(%{"name" => "Box"})
+    QemuAdmin.Terminal.log(vm.id, "error", "uma linha antiga")
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#vm-row-box") |> render_click()
+    assert render(view) =~ "uma linha antiga"
+
+    view |> element("#cmds-toggle") |> render_click()
+    refute has_element?(view, "#vm-cmds")
+    view |> element("#cmds-toggle") |> render_click()
+    assert render(view) =~ "uma linha antiga"
+
+    view |> element("#cmds-clear") |> render_click()
+    refute render(view) =~ "uma linha antiga"
+    assert QemuAdmin.VmServer.commands(vm.id) == []
+
+    # the buttons that moved to the Comandos page are not in the Terminal any more
+    refute has_element?(view, "#saved-open")
+    refute has_element?(view, "#cmd-edit")
+  end
+
+  test "the launch line is edited on the Comandos page", %{conn: conn} do
+    {:ok, vm} = VmStore.create(%{"name" => "Box"})
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#nav-commands") |> render_click()
+    assert has_element?(view, "#lp-#{vm.id}")
+
+    view |> element("#lp-#{vm.id} button", "Editar linha de partida") |> render_click()
+    assert has_element?(view, "#lp-form")
+
+    # without what the app needs to control the VM it is refused
+    html = view |> form("#lp-form", text: "-machine q35") |> render_submit()
+    assert html =~ "{qmp}"
+    assert {:ok, %{command: ""}} = VmStore.get(vm.id)
+
+    view |> element("#lp-cancel") |> render_click()
+    refute has_element?(view, "#lp-form")
+  end
+
   test "the Comandos page: a rail icon, and creating, editing and deleting a saved command", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
     view |> element("#nav-commands") |> render_click()

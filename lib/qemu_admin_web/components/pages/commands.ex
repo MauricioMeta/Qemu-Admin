@@ -3,15 +3,20 @@ defmodule QemuAdminWeb.Components.Pages.Commands do
   The **Comandos** page: every saved command of the workspace (`terminal.json`,
   `QemuAdmin.Terminal.Saved`) to create, edit and delete. A saved command is a
   name that the Terminal runs as a sequence of steps on a VM; to run one, type its
-  name in a VM's Terminal (or use *Comandos salvos* there).
+  name in a VM's Terminal.
 
   `editing` is nil (the list) or the form's map (`"original"`, `"name"`,
   `"description"`, `"vm"`, `"steps"` as text, `"continue_on_error"`); `error` is
   what the last save said was wrong; `file_error` that `terminal.json` cannot be
   read (the page then refuses to overwrite it).
 
+  Below the saved commands, the **linha de partida** of each VM: the arguments
+  QEMU starts with, which the app builds from the VM's settings unless the user
+  edits them (`lp`: nil or `%{id:, text:, error:}`, the VM being edited).
+
   Events: `cp_new`, `cp_edit` (`name`), `cp_change`, `cp_cancel`, `cp_save`,
-  `cp_delete` (`name`).
+  `cp_delete` (`name`); `lp_edit` (`id`), `lp_change`, `lp_cancel`, `lp_save`,
+  `lp_reset`.
   """
 
   use Surface.Component
@@ -33,6 +38,15 @@ defmodule QemuAdminWeb.Components.Pages.Commands do
 
   @doc "Where `terminal.json` is."
   prop path, :string, default: ""
+
+  @doc "The launch line's editor: nil or `%{id:, text:, error:}`."
+  prop lp, :any, default: nil
+
+  @doc "`%{vm id => the emulator's executable name}`."
+  prop exes, :map, default: %{}
+
+  @doc "`%{vm id => the launch line}`: the edited one, else the one the app builds."
+  prop lines, :map, default: %{}
 
   # how a step reaches QEMU: the badge next to it
   defp via("qmp:" <> _), do: {"QMP", "bg-primary/15 text-primary"}
@@ -58,7 +72,7 @@ defmodule QemuAdminWeb.Components.Pages.Commands do
           <div class="font-semibold">Comandos salvos</div>
           <p class="text-base-content/55">
             Um nome (como <code class="text-primary/80">start</code>) que o Terminal de uma VM executa como uma sequência de passos.
-            Digite o nome no Terminal da VM e dê Enter, ou use <strong>Comandos salvos</strong> lá.
+            Digite o nome no Terminal da VM e dê Enter.
           </p>
           <p class="mt-1 truncate font-mono text-[0.62rem] text-base-content/40" title={@path}>{@path}</p>
         </div>
@@ -187,6 +201,82 @@ defmodule QemuAdminWeb.Components.Pages.Commands do
           </div>
         </li>
       </ul>
+
+      <section id="launch-lines" class="mt-8">
+        <h3 class="qa-label text-primary">Linha de partida</h3>
+        <p class="mb-3 text-xs text-base-content/55">
+          Os argumentos com que cada VM inicia. O app os monta a partir da configuração da VM; aqui dá para
+          <strong>editá-los à mão</strong> (vale no próximo boot). No lugar das portas que o app escolhe a cada início, use
+          {#for p <- QemuAdmin.Vm.Args.placeholders()}<code class="mr-1.5 text-primary/80">{p}</code>{/for}.
+        </p>
+        <ul class="space-y-2">
+          <li :for={{vm, _rt} <- @vms} id={"lp-#{vm.id}"} class="qa-card p-3 text-xs">
+            <div class="flex items-start gap-2">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-2">
+                  <span class="font-semibold">{vm.name}</span>
+                  <span
+                    class={"rounded px-1.5 text-[0.6rem]", "bg-warning/15 text-warning": vm.command not in [nil, ""], "bg-base-300 text-base-content/55": vm.command in [nil, ""]}
+                  >
+                    {if vm.command in [nil, ""], do: "padrão do app", else: "editada"}
+                  </span>
+                </div>
+                <p class="mt-1 break-all font-mono text-[0.65rem] text-base-content/60">
+                  <span class="text-base-content/35">{Map.get(@exes, vm.id)}</span> {Map.get(@lines, vm.id)}
+                </p>
+              </div>
+              <button
+                :if={is_nil(@lp) or @lp.id != vm.id}
+                type="button"
+                phx-click="lp_edit"
+                phx-value-id={vm.id}
+                class="shrink-0 rounded border border-base-content/20 px-2 py-1 hover:bg-base-300"
+              >
+                Editar linha de partida
+              </button>
+            </div>
+            <form
+              :if={@lp && @lp.id == vm.id}
+              id="lp-form"
+              phx-change="lp_change"
+              phx-submit="lp_save"
+              class="mt-3 space-y-2"
+              autocomplete="off"
+            >
+              <textarea
+                id="lp-text"
+                name="text"
+                rows="5"
+                spellcheck="false"
+                phx-debounce="300"
+                class={"qa-field font-mono !text-[0.68rem]", "!border-error": @lp.error}
+              >{@lp.text}</textarea>
+              <p :if={@lp.error} id="lp-error" class="text-error">{@lp.error}</p>
+              <p class="text-[0.65rem] text-base-content/45">
+                A linha precisa do que o app usa para controlar a VM: <code>{"{qmp}"}</code> sempre, <code>{"{serial}"}</code> nas placas
+                e <code>{"{gdb}"}</code> no ESP32 e no Arduino. Em caminhos do Windows use <code>/</code>.
+              </p>
+              <div class="flex items-center gap-2">
+                <button type="submit" id="lp-save" class="rounded-md bg-primary px-3 py-1 font-semibold text-primary-content hover:brightness-110">
+                  Salvar
+                </button>
+                <button type="button" id="lp-cancel" phx-click="lp_cancel" class="rounded-md border border-base-content/20 px-3 py-1 hover:bg-base-300">
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  id="lp-reset"
+                  phx-click="lp_reset"
+                  class="ml-auto rounded-md border border-base-content/20 px-3 py-1 hover:bg-base-300"
+                  title="Voltar à linha que o app monta sozinho"
+                >
+                  Restaurar a padrão
+                </button>
+              </div>
+            </form>
+          </li>
+        </ul>
+      </section>
     </div>
     """
   end

@@ -43,20 +43,8 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
 
   prop open, :boolean, default: true
 
-  @doc "The launch line's editor: nil (closed) or `%{text:, error:}`."
-  prop edit, :any, default: nil
-
-  @doc "The emulator's executable, shown before the edited arguments."
-  prop exe, :string, default: ""
-
-  @doc "The saved commands the VM has (`QemuAdmin.Terminal.Saved.list/1`)."
+  @doc "The saved commands the VM has (`QemuAdmin.Terminal.Saved.list/1`), for the suggestions."
   prop saved, :list, default: []
-
-  @doc "The saved commands panel: nil (closed) or `%{editing:, error:, file_error:}`."
-  prop panel, :any, default: nil
-
-  @doc "Where the saved commands are (`terminal.json`)."
-  prop saved_path, :string, default: ""
 
   defp saved_json(saved) do
     saved
@@ -139,133 +127,27 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           <span class="text-[0.62rem] font-semibold uppercase leading-none tracking-[0.06em] text-base-content/60">Terminal</span>
         </button>
         <span class="min-w-0 flex-1" />
-        <span :if={@vm.command not in [nil, ""]} class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning">
-          linha de partida editada
-        </span>
         <button
+          :if={@vm.command not in [nil, ""]}
           type="button"
-          id="saved-open"
-          phx-click="saved_open"
-          class="shrink-0 whitespace-nowrap rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
-          title="Comandos salvos: um nome que executa uma sequência de comandos"
+          phx-click="nav"
+          phx-value-view="commands"
+          class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning hover:bg-warning/25"
+          title="A linha de partida desta VM foi editada: abrir a página Comandos"
         >
-          Comandos salvos
+          linha de partida editada
         </button>
         <button
           type="button"
-          id="cmd-edit"
-          phx-click="cmd_edit"
-          class="shrink-0 rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
-          title="Editar a linha de comando com que a VM é iniciada"
+          id="cmds-clear"
+          phx-click="cmds_clear"
+          data-confirm="Limpar o histórico do Terminal desta VM?"
+          class="flex shrink-0 items-center gap-1 rounded border border-base-content/20 px-2 py-0.5 text-[0.68rem] text-base-content/70 hover:border-primary/40 hover:text-primary"
+          title="Apaga o histórico do Terminal desta VM (o commands.log)"
         >
-          Editar linha de partida
+          <.icon name="hero-trash" class="size-3" /> Limpar
         </button>
       </div>
-      <section
-        :if={@open and @panel}
-        id="saved-panel"
-        class="max-h-[45%] shrink-0 space-y-2 overflow-y-auto border-t border-primary/15 px-3 py-2 text-xs"
-      >
-        <div class="flex items-center gap-2">
-          <h4 class="qa-label mb-0 text-primary">Comandos salvos</h4>
-          <span class="min-w-0 flex-1 truncate font-mono text-[0.62rem] text-base-content/40" title={@saved_path}>
-            {@saved_path}
-          </span>
-          <button
-            type="button"
-            id="saved-manage"
-            phx-click="nav"
-            phx-value-view="commands"
-            class="rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
-            title="Abre a página Comandos: criar, editar e excluir"
-          >
-            Editar comandos
-          </button>
-          <button
-            type="button"
-            id="saved-close"
-            phx-click="saved_close"
-            class="rounded border border-base-content/20 px-2 py-0.5 text-[0.68rem] hover:bg-base-300"
-          >
-            Fechar
-          </button>
-        </div>
-        <p :if={@panel[:file_error]} class="text-error">{@panel[:file_error]}</p>
-        <p :if={@saved == []} class="text-base-content/50">
-          Nenhum comando salvo. Um comando salvo é um nome (como <code class="text-primary/80">start</code>) que executa
-          uma sequência de comandos nesta VM: abra <strong>Editar comandos</strong> (ou o ícone Comandos da barra lateral), ou edite o arquivo acima à mão.
-        </p>
-        <ul :if={@saved != []} class="divide-y divide-primary/10 rounded border border-primary/15">
-          <li :for={c <- @saved} id={"saved-#{c["name"]}"} class="flex items-center gap-2 px-2 py-1.5">
-            <div class="min-w-0 flex-1">
-              <div class="flex items-baseline gap-2">
-                <span class="font-mono font-semibold text-primary">{c["name"]}</span>
-                <span :if={c["vm"]} class="rounded bg-base-300 px-1 text-[0.58rem] text-base-content/55">só {c["vm"]}</span>
-                <span class="truncate text-base-content/55">{c["description"]}</span>
-              </div>
-              <div class="truncate font-mono text-[0.62rem] text-base-content/40" title={Enum.join(c["steps"], "  ›  ")}>
-                {Enum.join(c["steps"], "  ›  ")}
-              </div>
-            </div>
-            <button
-              type="button"
-              phx-click="saved_run"
-              phx-value-name={c["name"]}
-              class="rounded bg-success/15 px-2 py-0.5 text-[0.68rem] text-success hover:bg-success/25"
-            >
-              Executar
-            </button>
-          </li>
-        </ul>
-      </section>
-      <form
-        :if={@open and @edit}
-        id="cmd-edit-form"
-        phx-change="cmd_edit_change"
-        phx-submit="cmd_edit_save"
-        class="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto border-t border-primary/15 px-3 py-2"
-      >
-        <p class="text-[0.68rem] text-base-content/55">
-          Os argumentos de <code class="text-primary/80">{Path.basename(@exe)}</code>. No lugar das portas que o app escolhe a cada
-          início, use {#for p <- QemuAdmin.Vm.Args.placeholders()}<code class="mr-1.5 text-primary/80">{p}</code>{/for}.
-          Vale a partir do <strong>próximo boot</strong>{if running?(@rt), do: " (a VM está ligada)"}.
-        </p>
-        <textarea
-          id="cmd-edit-text"
-          name="text"
-          rows="5"
-          spellcheck="false"
-          phx-debounce="300"
-          class={"qa-field font-mono !text-[0.68rem]", "!border-error": @edit.error}
-        >{@edit.text}</textarea>
-        <p :if={@edit.error} class="text-[0.68rem] text-error">{@edit.error}</p>
-        <div class="flex items-center gap-2">
-          <button
-            type="submit"
-            id="cmd-edit-save"
-            class="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-content hover:brightness-110"
-          >
-            Salvar
-          </button>
-          <button
-            type="button"
-            id="cmd-edit-cancel"
-            phx-click="cmd_edit_cancel"
-            class="rounded-md border border-base-content/20 px-3 py-1 text-xs hover:bg-base-300"
-          >
-            Cancelar
-          </button>
-          <button
-            type="button"
-            id="cmd-edit-reset"
-            phx-click="cmd_edit_reset"
-            class="ml-auto rounded-md border border-base-content/20 px-3 py-1 text-xs hover:bg-base-300"
-            title="Voltar à linha que o app monta sozinho"
-          >
-            Restaurar a padrão
-          </button>
-        </div>
-      </form>
       <div :if={@open} class="flex min-h-0 flex-1 flex-col">
         <div
           id="vm-cmds"
