@@ -17,6 +17,11 @@ Pedido: imagens de ESP32 com RTEMS e de STM32. **Nada foi baixado** — não há
 - O RTEMS é distribuído como fonte: é preciso toolchain + build do BSP + a aplicação. Sem imagem pronta (busca em 2026-10-25).
 - Máquinas no QEMU: ver [[STM32 e Cortex-M]].
 
+## FreeRTOS no STM32 (feito em 2026-10-25)
+- Não havia firmware pronto; compilei um: `examples/stm32-freertos/` (fonte, Makefile, README e `firmware.bin`).
+- Toolchain: `mingw-w64-ucrt-x86_64-arm-none-eabi-{gcc,binutils,newlib}` pelo `pacman` do MSYS2 (os pacotes `mingw64` já tinham saído do repositório: foi preciso `pacman -Sy` e usar o `ucrt64`, gcc 16.2). Kernel: `git clone --depth 1` do FreeRTOS-Kernel (V11.3.2).
+- Resultado no app: aba Serial com as mensagens do consumidor. Ver [[STM32 e Cortex-M]].
+
 ## Caminhos possíveis
 1. Firmware pronto para `netduino2` (Zephyr/FreeRTOS).
 2. Montar o ambiente de build do RTEMS.
