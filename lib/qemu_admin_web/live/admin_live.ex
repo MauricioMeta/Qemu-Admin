@@ -2359,6 +2359,7 @@ defmodule QemuAdminWeb.AdminLive do
       <:controls>
         {!-- always the same set, so nothing jumps around: what does not apply is dimmed --}
         <IconButton
+          outlined
           id="vm-start"
           title="Ligar"
           click="start_vm"
@@ -2369,6 +2370,7 @@ defmodule QemuAdminWeb.AdminLive do
         />
         {#if paused?(@rt)}
           <IconButton
+          outlined
             id="vm-resume"
             title="Continuar"
             click="resume_vm"
@@ -2378,6 +2380,7 @@ defmodule QemuAdminWeb.AdminLive do
           />
         {#else}
           <IconButton
+          outlined
             id="vm-pause"
             title="Pausar"
             click="pause_vm"
@@ -2387,6 +2390,7 @@ defmodule QemuAdminWeb.AdminLive do
           />
         {/if}
         <IconButton
+          outlined
           id="vm-reset"
           title="Reiniciar (reset)"
           click="reset_vm"
@@ -2397,6 +2401,7 @@ defmodule QemuAdminWeb.AdminLive do
           disabled={stopped?(@rt)}
         />
         <IconButton
+          outlined
           id="vm-powerdown"
           title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
           click="powerdown_vm"
@@ -2406,6 +2411,7 @@ defmodule QemuAdminWeb.AdminLive do
           disabled={stopped?(@rt)}
         />
         <IconButton
+          outlined
           :if={is_nil(Vm.board(@vm))}
           id="vm-quit"
           title="Forçar desligamento"
