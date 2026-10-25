@@ -207,7 +207,6 @@ defmodule QemuAdminWeb.AdminLive do
        cmd_history: [],
        cmd_groups: %{},
        lp: nil,
-       serial_split: false,
        tree_open: [],
        saved: [],
        cp: %{editing: nil, error: nil},
@@ -967,9 +966,6 @@ defmodule QemuAdminWeb.AdminLive do
     {data, total} = VmServer.serial_buffer(id)
     {:reply, %{data: Base.encode64(data), total: total}, socket}
   end
-
-  def handle_event("toggle_split", _params, socket),
-    do: {:noreply, update(socket, :serial_split, &(not &1))}
 
   def handle_event("serial_input", %{"id" => id, "data" => data}, socket) do
     VmServer.serial_write(id, data)
@@ -2046,24 +2042,23 @@ defmodule QemuAdminWeb.AdminLive do
 
   defp vm_views(vm), do: Map.fetch!(@views, Vm.kind(vm))
 
-  # The UART's terminal, and beside it (when asked) the board drawn with its pins, or
-  # the VM's summary where there is no drawing: to watch the whole board at once.
-  defp serial_with_side(assigns) do
+  # A board's Visão geral: the UART's terminal and, beside it, the board — drawn with its
+  # pins live where there is a drawing, else the VM's cards — to watch it whole.
+  defp board_overview(assigns) do
     board = Vm.board(assigns.vm)
     assigns = assign(assigns, board: board, drawn?: board != nil and board.io != nil)
 
     ~F"""
-    <div class="flex min-h-0 flex-1">
-      <SerialConsole vm={@vm} rt={@rt} split={@serial_split} side_label={if @drawn?, do: "a placa", else: "o resumo"} />
+    <div id="board-overview" class="flex min-h-0 flex-1">
+      <SerialConsole vm={@vm} rt={@rt} />
       <aside
-        :if={@serial_split}
-        id="serial-side"
+        id="board-side"
         class="flex min-h-0 w-[min(34rem,45%)] shrink-0 flex-col overflow-y-auto border-l border-primary/20 bg-base-100"
       >
         {#if @drawn?}
           <Io vm={@vm} rt={@rt} board={@board} gpio={@gpio} />
         {#else}
-          <Overview vm={@vm} rt={@rt} disk_info={@disk_info} command={@command} serial_tail={@serial_tail} />
+          <Overview vm={@vm} rt={@rt} disk_info={@disk_info} command={@command} serial_tail={@serial_tail} compact />
         {/if}
       </aside>
     </div>
@@ -2366,12 +2361,12 @@ defmodule QemuAdminWeb.AdminLive do
     {#case @vm_view}
       {#match "console"}
         {#if Vm.mcu?(@vm)}
-          {serial_with_side(assigns)}
+          <SerialConsole vm={@vm} rt={@rt} />
         {#else}
           <Console vm={@vm} rt={@rt} />
         {/if}
       {#match "serial"}
-        {serial_with_side(assigns)}
+        <SerialConsole vm={@vm} rt={@rt} />
       {#match "io"}
         <Io vm={@vm} rt={@rt} board={Vm.board(@vm)} gpio={@gpio} />
       {#match "firmware"}
@@ -2396,13 +2391,17 @@ defmodule QemuAdminWeb.AdminLive do
       {#match "log"}
         <Log lines={@streams.log} />
       {#match _}
-        <Overview
-          vm={@vm}
-          rt={@rt}
-          disk_info={@disk_info}
-          command={@command}
-          serial_tail={@serial_tail}
-        />
+        {#if Vm.mcu?(@vm)}
+          {board_overview(assigns)}
+        {#else}
+          <Overview
+            vm={@vm}
+            rt={@rt}
+            disk_info={@disk_info}
+            command={@command}
+            serial_tail={@serial_tail}
+          />
+        {/if}
     {/case}
     <Terminal
       vm={@vm}

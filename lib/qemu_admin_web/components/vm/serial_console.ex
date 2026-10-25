@@ -7,13 +7,11 @@ defmodule QemuAdminWeb.Components.Vm.SerialConsole do
 
   Under it, a **send bar** (`SerialSend` hook): a line of text, what ends it
   (nada, LF, CR, CR+LF) and Enter or *Enviar*; ↑ / ↓ walk what was sent. It goes
-  out as `serial_input`, like the terminal's own keystrokes. On top, a button
-  shows or hides the **side panel** (`split`): the board drawn, or the VM's summary,
-  next to the terminal (`toggle_split`).
+  out as `serial_input`, like the terminal's own keystrokes.
 
   The element id carries the run (its start time), so a restart mounts a
   fresh terminal. Events: `serial_init`, `serial_input` (from the hooks),
-  `start_vm`, `toggle_split`.
+  `start_vm`.
   """
 
   use Surface.Component
@@ -24,36 +22,12 @@ defmodule QemuAdminWeb.Components.Vm.SerialConsole do
   prop vm, :struct, required: true
   prop rt, :map, required: true
 
-  @doc "Whether the side panel is open."
-  prop split, :boolean, default: false
-
-  @doc "What the side panel shows, for the button: `\"a placa\"` or `\"o resumo\"`."
-  prop side_label, :string, default: "a placa"
-
   defp run_id(%{started_at: %DateTime{} = t}), do: DateTime.to_unix(t, :millisecond)
   defp run_id(_), do: "off"
 
   def render(assigns) do
     ~F"""
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#0c0a09]">
-      <div class="flex items-center gap-2 border-b border-primary/15 bg-base-200/60 px-3 py-1 text-[0.68rem] text-base-content/55">
-        <span class="font-mono">UART</span>
-        <span :if={stopped?(@rt)} class="text-base-content/40">· última execução</span>
-        <button
-          type="button"
-          id="serial-split"
-          phx-click="toggle_split"
-          aria-pressed={to_string(@split)}
-          class={
-            "ml-auto inline-flex items-center gap-1.5 rounded border px-2 py-0.5 hover:bg-base-300",
-            "border-primary/50 bg-primary/10 text-primary": @split,
-            "border-base-content/20": not @split
-          }
-        >
-          <.icon name="hero-view-columns" class="size-3.5" />
-          {if @split, do: "Ocultar #{@side_label}", else: "Mostrar #{@side_label} ao lado"}
-        </button>
-      </div>
       <div
         id={"serial-#{@vm.id}-#{run_id(@rt)}"}
         phx-hook="SerialTerm"

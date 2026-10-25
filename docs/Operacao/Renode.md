@@ -17,9 +17,9 @@ A lista de VMs é uma **árvore**: o motor (QEMU, Renode) → a VM → os seus *
 - No QEMU, o programa de um Arduino ou de uma placa Cortex-M é o mesmo `program` (`Vm.Args.avr_firmware/1` → `Firmwares.path/1`).
 
 ## A aba Serial: enviar e ver a placa ao lado
-Vale para toda placa com UART (Renode, ESP32, Arduino, Cortex-M, Raspberry Pi na aba Serial).
+Vale para toda placa com UART.
 - **Barra de envio** (`#serial-send-<id>`, hook `SerialSend`) sob o terminal: uma linha de texto, **o que a termina** (+ CR, + LF, + CR LF ou sem fim; o padrão é CR, o que o Enter do terminal já manda) e **Enviar** ou Enter. ↑ / ↓ repetem o que foi enviado (guardado por VM no navegador). Sai como `serial_input`, o mesmo caminho das teclas digitadas no terminal. O app não ecoa o que enviou: quem responde é o firmware, na UART.
-- **Mostrar a placa ao lado** (`#serial-split`, opcional): abre um painel à direita do terminal com a placa desenhada e os pinos ao vivo (ESP32, Arduino, Raspberry Pi) ou, onde não há desenho (Renode, Cortex-M), o resumo da VM. Serve para ver a UART e os pinos ao mesmo tempo.
+- **Visão geral = a placa ao lado da serial**: nas placas (Renode, ESP32, Arduino, Cortex-M, Raspberry Pi) a Visão geral divide a tela: à esquerda o terminal da UART com a barra de envio, à direita a placa desenhada com os pinos ao vivo (ESP32, Arduino, Raspberry Pi) ou, onde não há desenho (Renode, Cortex-M), os cartões da VM (placa, emulador, programa, UART, linha de comando). A aba Serial continua com o terminal em tela cheia.
 
 ## Como roda
 `QemuAdmin.RenodeServer` ocupa o lugar do `VmServer`: o mesmo registro por id, as mesmas chamadas (log, serial, histórico de comandos) e as mesmas mensagens no PubSub, então a página não distingue os dois.
@@ -39,5 +39,5 @@ Uma VM `stm32f4_discovery` com o `firmware.elf` da Netduino (FreeRTOS) imprimiu 
 - [ ] `mix renode.fetch` (baixar o Renode como o `mix qemu.fetch` faz com o QEMU) e instalação pela página QEMU.
 - [ ] Arquivos `.bin` no Renode (precisam do endereço de carga), `.resc` próprios e placas além de `platforms/boards`.
 - [ ] Desenho da placa e pinos (GPIO) das placas do Renode; hoje só a Serial.
-- [ ] Salvar quais nós da árvore estão abertos e o painel ao lado na sessão.
+- [ ] Salvar quais nós da árvore estão abertos na sessão.
 - [ ] Mais painéis ao lado (registradores, memória, periféricos do Renode) para monitorar a placa inteira.
