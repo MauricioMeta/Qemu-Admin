@@ -1,13 +1,13 @@
 defmodule QemuAdminWeb.Components.App.PageHeader do
   @moduledoc """
-  The bar on top of the main area, as in the Rockwell Viewer:
+  The bar on top of the main area, as in the Rockwell Viewer and the Hypermodel:
 
-    1. the toolbar (`--qa-bar`, 34 px): a title or the VM's power state at
-       the left (`nav`), the page's view switch centred (`center`) and its
-       controls at the right (`buttons`). With the rail's and the panel's
-       headers it makes the window's top line, all of one height, so their
-       bottom borders line up;
-    2. the open VMs' tabs (`tabs`, `App.Tabs`), when there are any;
+    1. the open VMs' tabs (`tabs`, `App.Tabs`), when there are any: the window's
+       top line, which the rail's and the panel's headers line up with;
+    2. the toolbar (`--qa-bar`, 34 px) **under the tabs**: a title or the VM's
+       power state at the left (`nav`), the page's view switch centred (`center`)
+       and its controls at the right (`buttons`). With no tabs open it is the top
+       line itself;
     3. the path to the page (`breadcrumb`), a slim line as high as the footer.
   """
 
@@ -31,6 +31,7 @@ defmodule QemuAdminWeb.Components.App.PageHeader do
   def render(assigns) do
     ~F"""
     <header id="page-header" class="shrink-0 text-xs">
+      <#slot {@tabs} />
       <div
         id="page-toolbar"
         class="grid h-[var(--qa-bar)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-primary/20 px-3"
@@ -45,7 +46,6 @@ defmodule QemuAdminWeb.Components.App.PageHeader do
           <#slot {@buttons} />
         </div>
       </div>
-      <#slot {@tabs} />
       <div id="page-path" class="flex h-8 items-center gap-2 border-b border-primary/20 px-4">
         <#slot {@breadcrumb} />
       </div>

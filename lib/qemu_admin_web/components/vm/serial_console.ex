@@ -38,6 +38,7 @@ defmodule QemuAdminWeb.Components.Vm.SerialConsole do
     <div class="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#0c0a09]">
       <div class="flex items-center gap-2 border-b border-primary/15 bg-base-200/60 px-3 py-1 text-[0.68rem] text-base-content/55">
         <span class="font-mono">UART</span>
+        <span :if={stopped?(@rt)} class="text-base-content/40">· última execução</span>
         <button
           type="button"
           id="serial-split"
@@ -51,21 +52,6 @@ defmodule QemuAdminWeb.Components.Vm.SerialConsole do
         >
           <.icon name="hero-view-columns" class="size-3.5" />
           {if @split, do: "Ocultar #{@side_label}", else: "Mostrar #{@side_label} ao lado"}
-        </button>
-      </div>
-      <div
-        :if={stopped?(@rt)}
-        class="flex items-center gap-3 border-b border-primary/15 bg-base-200/80 px-4 py-2 text-xs text-base-content/60"
-      >
-        <.icon name="hero-power" class="size-4 text-base-content/35" />
-        <span class="flex-1">O chip está desligado — abaixo, a saída da última execução.</span>
-        <button
-          type="button"
-          phx-click="start_vm"
-          phx-value-id={@vm.id}
-          class="inline-flex items-center gap-1.5 rounded-md border border-success/40 px-2.5 py-1 text-success hover:bg-success/10"
-        >
-          <.icon name="hero-play-solid" class="size-3.5" /> Ligar
         </button>
       </div>
       <div
