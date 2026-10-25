@@ -10,6 +10,8 @@ import {WindowControls} from "./hooks/window_controls"
 import {TabBar} from "./hooks/tab_bar"
 import {LogTail} from "./hooks/log_tail"
 import {SerialTerm} from "./hooks/serial_term"
+import {CmdInput} from "./hooks/cmd_input"
+import {CmdLog} from "./hooks/cmd_log"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 // WebSocket only, no long-poll fallback: the app runs on localhost, where
@@ -21,7 +23,7 @@ try {
 
 const liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
-  hooks: {PanelResizer, VncConsole, WindowControls, TabBar, LogTail, SerialTerm},
+  hooks: {PanelResizer, VncConsole, WindowControls, TabBar, LogTail, SerialTerm, CmdInput, CmdLog},
 })
 
 // Show progress bar on live navigation and form submits

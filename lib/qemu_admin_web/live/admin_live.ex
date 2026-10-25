@@ -70,6 +70,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdminWeb.Components.Pages.Settings, as: SettingsPage
 
   alias QemuAdminWeb.Components.Vm.{
+    Commands,
     Console,
     CortexFirmware,
     Firmware,
@@ -143,6 +144,7 @@ defmodule QemuAdminWeb.AdminLive do
   }
 
   @log_limit 1_000
+  @cmd_limit 500
 
   @impl true
   def mount(_params, _session, socket) do
@@ -188,10 +190,14 @@ defmodule QemuAdminWeb.AdminLive do
        settings: Settings.all(),
        settings_section: :qemu,
        close: nil,
-       log_seq: 0
+       log_seq: 0,
+       cmds_open: true,
+       cmd_history: []
      )
      |> stream_configure(:log, dom_id: &"log-#{&1.id}")
      |> stream(:log, [])
+     |> stream_configure(:cmds, dom_id: &"cmd-#{&1.seq}")
+     |> stream(:cmds, [])
      |> load_vms()}
   end
 
@@ -556,6 +562,26 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
+  def handle_event("cmds_toggle", _params, socket),
+    do: {:noreply, update(socket, :cmds_open, &(not &1))}
+
+  def handle_event("cmd_send", %{"cmd" => input}, socket) do
+    case current(socket) do
+      {vm, _rt} ->
+        # the answer is in the history (the VmServer logs it and broadcasts it)
+        case VmServer.console(vm.id, input) do
+          {:error, msg} when is_binary(msg) and msg != "" ->
+            {:noreply, put_flash(socket, :error, "Comando: #{msg}")}
+
+          _ ->
+            {:noreply, socket}
+        end
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("forget_workspace", %{"path" => path}, socket) do
     Workspace.forget(path)
     {:noreply, assign(socket, workspaces: Workspace.list())}
@@ -814,6 +840,23 @@ defmodule QemuAdminWeb.AdminLive do
 
   def handle_info({:vm_log, _id, _line}, socket), do: {:noreply, socket}
 
+  # a new run starts its history over (the sequence numbers start at 1 again)
+  def handle_info({:vm_cmd, id, %{dir: "launch"} = entry}, %{assigns: %{selected: id}} = socket) do
+    {:noreply,
+     socket
+     |> assign(cmd_history: [])
+     |> stream(:cmds, [entry], reset: true)}
+  end
+
+  def handle_info({:vm_cmd, id, entry}, %{assigns: %{selected: id}} = socket) do
+    {:noreply,
+     socket
+     |> stream_insert(:cmds, entry, limit: -@cmd_limit)
+     |> update(:cmd_history, &history_add(&1, entry))}
+  end
+
+  def handle_info({:vm_cmd, _id, _entry}, socket), do: {:noreply, socket}
+
   def handle_info(
         {:vm_serial, id, offset, data},
         %{assigns: %{selected: id, vm_view: view}} = socket
@@ -904,6 +947,8 @@ defmodule QemuAdminWeb.AdminLive do
         socket
 
       {vm, _rt} ->
+        socket = load_cmds(socket, vm)
+
         case socket.assigns.vm_view do
           "overview" ->
             socket
@@ -936,6 +981,22 @@ defmodule QemuAdminWeb.AdminLive do
         end
     end
   end
+
+  # The command panel's history: this VM's, from the running server or the file.
+  defp load_cmds(socket, vm) do
+    entries = VmServer.commands(vm.id)
+
+    socket
+    |> assign(cmd_history: Enum.reduce(entries, [], &history_add(&2, &1)))
+    |> stream(:cmds, entries, reset: true)
+  end
+
+  # What the prompt's arrow keys recall: what was typed or sent, without repeats in a row.
+  defp history_add(history, %{dir: dir, text: text}) when dir in ["hmp", "sent"] do
+    if List.last(history) == text, do: history, else: Enum.take(history ++ [text], -100)
+  end
+
+  defp history_add(history, _entry), do: history
 
   # The command line shown on the overview: the real one while running,
   # otherwise what the next start would run (ports shown as placeholders).
@@ -1802,6 +1863,7 @@ defmodule QemuAdminWeb.AdminLive do
           serial_tail={@serial_tail}
         />
     {/case}
+    <Commands vm={@vm} rt={@rt} entries={@streams.cmds} history={@cmd_history} open={@cmds_open} />
     """
   end
 end

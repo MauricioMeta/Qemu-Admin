@@ -19,8 +19,17 @@ defmodule QemuAdmin.VmServer do
   and resume go through it, and the QMP events every watchpoint causes
   (STOP, RESUME) are not the user's.
 
+  What was sent to QEMU is kept as a **command history** (`commands/1`,
+  `commands.log` in the VM's folder, one JSON object per line): the command
+  line the run started with, every QMP command a user action sent and its
+  answer, the QMP events, and what was typed in the page's command panel
+  (`console/2`: a QMP JSON message, or a monitor command such as
+  `info registers`, which goes through `human-monitor-command`). The
+  screenshots and the state queries the server makes by itself are left out.
+
   Every change goes out on `QemuAdmin.topic/0`:
   `{:vm_status, id, status}`, `{:vm_log, id, line}`, `{:vm_screen, id, rev}`,
+  `{:vm_cmd, id, entry}` (an entry of the command history),
   `{:vm_serial, id, offset, bytes}` (`offset`: where `bytes` start in the
   run's whole output, so a page that just loaded the buffer drops what it
   already has).
@@ -38,6 +47,7 @@ defmodule QemuAdmin.VmServer do
   @screen_every 5_000
   @qmp_attempts 60
   @serial_keep 262_144
+  @cmd_keep 500
 
   # ---------------------------------------------------------------- API
 
@@ -103,6 +113,69 @@ defmodule QemuAdmin.VmServer do
   @doc "Sends a QMP command: `{:ok, return}` or `{:error, reason}`."
   def qmp(id, command, args \\ %{}), do: call(id, {:qmp, command, args})
 
+  @doc """
+  What the user typed in the command panel: a QMP message as JSON
+  (`{"execute": "query-status"}`, with optional `"arguments"`) or a monitor
+  (HMP) command (`info registers`). `{:ok, answer}` or `{:error, reason}`;
+  the answer is in the history too.
+  """
+  def console(id, input) do
+    case String.trim(input) do
+      "" ->
+        {:error, "comando vazio"}
+
+      "{" <> _ = json ->
+        case Jason.decode(json) do
+          {:ok, %{"execute" => cmd} = msg} when is_binary(cmd) ->
+            case Map.get(msg, "arguments", %{}) do
+              args when is_map(args) -> qmp(id, cmd, args)
+              _ -> {:error, ~s("arguments" deve ser um objeto)}
+            end
+
+          _ ->
+            {:error, ~s(JSON QMP inválido; use {"execute": "query-status"})}
+        end
+
+      line ->
+        call(id, {:hmp, line})
+    end
+  end
+
+  @doc """
+  The command history, oldest first: `%{seq:, at:, dir:, text:}` with `dir`
+  `"launch"`, `"sent"`, `"hmp"`, `"received"`, `"event"` or `"error"`. From
+  `commands.log` when the VM is not running.
+  """
+  def commands(id) do
+    case call(id, :commands) do
+      {:error, :not_running} -> commands_file(id)
+      list -> list
+    end
+  end
+
+  def commands_path(id), do: Path.join(QemuAdmin.Paths.vm_dir(id), "commands.log")
+
+  defp commands_file(id) do
+    case File.read(commands_path(id)) do
+      {:ok, text} ->
+        text
+        |> String.split(~r/\R/, trim: true)
+        |> Enum.flat_map(fn line ->
+          case Jason.decode(line) do
+            {:ok, %{"seq" => seq, "at" => at, "dir" => dir, "text" => t}} ->
+              [%{seq: seq, at: at, dir: dir, text: t}]
+
+            _ ->
+              []
+          end
+        end)
+        |> Enum.take(-@cmd_keep)
+
+      _ ->
+        []
+    end
+  end
+
   defp call(id, msg) do
     GenServer.call(via(id), msg, 15_000)
   catch
@@ -131,6 +204,7 @@ defmodule QemuAdmin.VmServer do
 
     File.mkdir_p!(Vm.dir(vm))
     {:ok, io} = File.open(log_path(vm.id), [:write, :binary])
+    {:ok, cmd_io} = File.open(commands_path(vm.id), [:write, :binary])
 
     port =
       Port.open({:spawn_executable, exe}, [
@@ -186,13 +260,17 @@ defmodule QemuAdmin.VmServer do
       serial_attempts: 0,
       serial_io: serial_io,
       serial_buf: "",
-      serial_total: 0
+      serial_total: 0,
+      cmd_io: cmd_io,
+      cmds: :queue.new(),
+      cmd_seq: 0
     }
 
     state =
       state
       |> add_log("# #{DateTime.utc_now() |> DateTime.truncate(:second)}")
       |> add_log("# #{command}")
+      |> log_cmd("launch", command)
 
     publish(state)
     Process.send_after(self(), :qmp_connect, 150)
@@ -226,8 +304,21 @@ defmodule QemuAdmin.VmServer do
     # A board has no ACPI: its power button is the plug.
     cmd = if cmd == "system_powerdown" and state.board?, do: "quit", else: cmd
     state = if cmd == "quit" or cmd == "system_powerdown", do: stopping(state, cmd), else: state
+    msg = if args == %{}, do: %{execute: cmd}, else: %{execute: cmd, arguments: args}
+    state = log_cmd(state, "sent", Jason.encode!(msg))
     {:noreply, send_qmp(state, cmd, args, from)}
   end
+
+  def handle_call({:hmp, _line}, _from, %{qmp_ready: false} = state) do
+    {:reply, {:error, "QMP ainda não conectado"}, state}
+  end
+
+  def handle_call({:hmp, line}, from, state) do
+    state = log_cmd(state, "hmp", line)
+    {:noreply, send_qmp(state, "human-monitor-command", %{"command-line" => line}, from)}
+  end
+
+  def handle_call(:commands, _from, state), do: {:reply, :queue.to_list(state.cmds), state}
 
   def handle_call(:log, _from, state), do: {:reply, :queue.to_list(state.log), state}
   def handle_call(:command_line, _from, state), do: {:reply, state.command, state}
@@ -403,6 +494,7 @@ defmodule QemuAdmin.VmServer do
 
   defp finish(state) do
     File.close(state.io)
+    File.close(state.cmd_io)
     if state.serial_io, do: File.close(state.serial_io)
 
     # gone without QEMU's exit being seen (this process crashed): the page
@@ -439,7 +531,15 @@ defmodule QemuAdmin.VmServer do
     reply(%{state | pending: pending}, from, {:error, err["desc"] || inspect(err)})
   end
 
-  defp qmp_message(state, %{"event" => event} = msg), do: qmp_event(state, event, msg)
+  defp qmp_message(state, %{"event" => event} = msg) do
+    # the gdbstub's own stops and resumes are not the user's (see the moduledoc)
+    state =
+      if state.gdb? and event in ["STOP", "RESUME"],
+        do: state,
+        else: log_cmd(state, "event", event_text(msg))
+
+    qmp_event(state, event, msg)
+  end
   defp qmp_message(state, _msg), do: state
 
   defp reply(state, :capabilities, {:ok, _}) do
@@ -464,7 +564,12 @@ defmodule QemuAdmin.VmServer do
 
   defp reply(state, from, result) when is_tuple(from) do
     GenServer.reply(from, result)
-    state
+
+    case result do
+      {:ok, text} when is_binary(text) -> log_cmd(state, "received", String.trim_trailing(text))
+      {:ok, ret} -> log_cmd(state, "received", Jason.encode!(%{return: ret}))
+      {:error, msg} -> log_cmd(state, "error", to_string(msg))
+    end
   end
 
   defp reply(state, _internal, _result), do: state
@@ -506,6 +611,31 @@ defmodule QemuAdmin.VmServer do
     })
 
     broadcast({:vm_status, state.vm.id, state.status})
+  end
+
+  defp event_text(%{"event" => event} = msg) do
+    case msg["data"] do
+      data when is_map(data) and data != %{} -> "#{event} #{Jason.encode!(data)}"
+      _ -> event
+    end
+  end
+
+  # One entry of the command history: kept (the last @cmd_keep), written to
+  # commands.log and broadcast. `text` may be long and have lines (an HMP answer).
+  defp log_cmd(state, dir, text) do
+    seq = state.cmd_seq + 1
+    at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+    entry = %{seq: seq, at: at, dir: dir, text: utf8(text)}
+    IO.binwrite(state.cmd_io, [Jason.encode_to_iodata!(entry), "\n"])
+    broadcast({:vm_cmd, state.vm.id, entry})
+
+    cmds = :queue.in(entry, state.cmds)
+    cmds = if :queue.len(cmds) > @cmd_keep, do: :queue.drop(cmds), else: cmds
+    %{state | cmds: cmds, cmd_seq: seq}
+  end
+
+  defp utf8(text) do
+    if String.valid?(text), do: text, else: String.replace_invalid(text, "?")
   end
 
   defp add_log(state, line) do
