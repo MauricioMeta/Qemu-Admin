@@ -21,7 +21,7 @@ A lista de VMs é uma **árvore**: o motor (QEMU, Renode) → a VM → os seus *
 ## A aba Serial: enviar e ver a placa ao lado
 Vale para toda placa com UART.
 - **Barra de envio** (`#serial-send-<id>`, hook `SerialSend`) sob o terminal: uma linha de texto, **o que a termina** (+ CR, + LF, + CR LF ou sem fim; o padrão é CR, o que o Enter do terminal já manda) e **Enviar** ou Enter. ↑ / ↓ repetem o que foi enviado (guardado por VM no navegador). Sai como `serial_input`, o mesmo caminho das teclas digitadas no terminal. O app não ecoa o que enviou: quem responde é o firmware, na UART.
-- **Visão geral = a placa ao lado da serial**: nas placas (Renode, ESP32, Arduino, Cortex-M, Raspberry Pi) a Visão geral divide a tela: à esquerda o terminal da UART com a barra de envio, à direita a placa desenhada com os pinos ao vivo (ESP32, Arduino, Raspberry Pi) ou, onde não há desenho (Renode, Cortex-M), os cartões da VM (placa, emulador, programa, UART, linha de comando). A aba Serial continua com o terminal em tela cheia.
+- **Visão geral = a serial ao lado da placa**: nas placas com UART a Visão geral é o terminal da UART (o mesmo componente da aba Serial, com a barra de envio) e, à direita, a placa desenhada com os pinos ao vivo (ESP32, Arduino, Raspberry Pi). Onde não há desenho (Renode, Cortex-M), é só o terminal. A aba Serial é a mesma serial em tela cheia.
 
 ## Como roda
 `QemuAdmin.RenodeServer` ocupa o lugar do `VmServer`: o mesmo registro por id, as mesmas chamadas (log, serial, histórico de comandos) e as mesmas mensagens no PubSub, então a página não distingue os dois.

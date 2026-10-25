@@ -2052,8 +2052,8 @@ defmodule QemuAdminWeb.AdminLive do
 
   defp vm_views(vm), do: Map.fetch!(@views, Vm.kind(vm))
 
-  # A board's Visão geral: the UART's terminal and, beside it, the board — drawn with its
-  # pins live where there is a drawing, else the VM's cards — to watch it whole.
+  # A board's Visão geral: the UART's terminal and, beside it, the board drawn with its
+  # pins live. A board with no drawing (Renode, Cortex-M) has the terminal alone.
   defp board_overview(assigns) do
     board = Vm.board(assigns.vm)
     assigns = assign(assigns, board: board, drawn?: board != nil and board.io != nil)
@@ -2062,14 +2062,11 @@ defmodule QemuAdminWeb.AdminLive do
     <div id="board-overview" class="flex min-h-0 flex-1">
       <SerialConsole vm={@vm} rt={@rt} />
       <aside
+        :if={@drawn?}
         id="board-side"
         class="flex min-h-0 w-[min(34rem,45%)] min-w-[16rem] shrink-0 flex-col overflow-y-auto border-l border-primary/20 bg-base-100"
       >
-        {#if @drawn?}
-          <Io vm={@vm} rt={@rt} board={@board} gpio={@gpio} />
-        {#else}
-          <Overview vm={@vm} rt={@rt} disk_info={@disk_info} command={@command} serial_tail={@serial_tail} compact />
-        {/if}
+        <Io vm={@vm} rt={@rt} board={@board} gpio={@gpio} />
       </aside>
     </div>
     """

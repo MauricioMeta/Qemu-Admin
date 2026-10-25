@@ -31,10 +31,6 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
 
   @doc "An ESP32's last lines of serial output."
   prop serial_tail, :list, default: []
-
-  @doc "Only the VM's cards, in one column: the serial and the screen are beside it (a board's Visão geral)."
-  prop compact, :boolean, default: false
-
   defp row(assigns) do
     ~F"""
     <div class="flex items-baseline justify-between gap-4 border-t border-base-content/5 py-1.5 first:border-t-0">
@@ -59,11 +55,8 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
         <pre class="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[0.68rem] text-base-content/70">{Enum.join(Map.get(@rt, :tail, []), "\n")}</pre>
       </div>
 
-      <div class={
-        "grid gap-4",
-        "xl:grid-cols-[minmax(0,var(--overview-split,1.3fr))_1rem_minmax(0,1fr)] xl:gap-x-0": not @compact
-      }>
-        <section :if={not @compact} class="qa-card overflow-hidden">
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,var(--overview-split,1.3fr))_1rem_minmax(0,1fr)] xl:gap-x-0">
+        <section class="qa-card overflow-hidden">
           <button
             type="button"
             phx-click="vm_view"
@@ -106,7 +99,6 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
 
         {!-- between the two columns (wide windows): drag to resize, double click for the default --}
         <div
-          :if={not @compact}
           id="overview-resizer"
           phx-hook="SplitResizer"
           data-var="--overview-split"
