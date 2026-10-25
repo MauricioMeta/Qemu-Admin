@@ -51,6 +51,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdmin.Esp32.Flash, as: EspFlash
   alias QemuAdmin.Qemu.{Img, InstallJob}
   alias QemuAdmin.Terminal, as: TermTools
+  alias QemuAdmin.Terminal.{Macro, Saved}
   alias QemuAdmin.Vm.Args
   alias QemuAdminWeb.Files
 
@@ -194,7 +195,9 @@ defmodule QemuAdminWeb.AdminLive do
        log_seq: 0,
        cmds_open: true,
        cmd_history: [],
-       cmd_edit: nil
+       cmd_edit: nil,
+       saved: [],
+       saved_panel: nil
      )
      |> stream_configure(:log, dom_id: &"log-#{&1.id}")
      |> stream(:log, [])
@@ -636,45 +639,100 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
-  # What is typed in the Terminal: a QEMU tool (qemu-img…) runs with the VM on
-  # or off; a monitor or QMP command needs it running. Everything shows in the
-  # history (`TermTools.log/3`; the VmServer logs what it sends by itself).
+  # What is typed in the Terminal. A saved command (its name, alone) runs its steps
+  # (`Macro.run/2`); anything else is executed as typed (`TermTools.execute/2`): a
+  # QEMU tool with the VM on or off, a monitor or QMP command with it running.
+  # Both run apart from the page and write to the VM's history, which shows live.
   def handle_event("cmd_send", %{"cmd" => input}, socket) do
-    with {vm, rt} <- current(socket), input when input != "" <- String.trim(input) do
-      case TermTools.route(input) do
-        {:tool, _name} ->
-          TermTools.log(vm.id, "tool", input)
-          key = {:tool, vm.id, System.unique_integer([:positive])}
-          {:noreply, start_async(socket, key, fn -> TermTools.run(vm, input) end)}
+    with {vm, _rt} <- current(socket), input when input != "" <- String.trim(input) do
+      key = fn kind -> {kind, vm.id, System.unique_integer([:positive])} end
 
-        {:error, msg} ->
-          TermTools.log(vm.id, "typed", input)
-          TermTools.log(vm.id, "error", msg)
-          {:noreply, socket}
-
-        :monitor ->
-          if running?(rt) do
-            # the answer is in the history (the VmServer logs it and broadcasts it)
-            case VmServer.console(vm.id, input) do
-              {:error, msg} when is_binary(msg) and msg != "" ->
-                {:noreply, put_flash(socket, :error, "Terminal: #{msg}")}
-
-              _ ->
-                {:noreply, socket}
-            end
-          else
-            TermTools.log(vm.id, "typed", input)
-
-            TermTools.log(
-              vm.id,
-              "error",
-              "a VM está desligada: os comandos do monitor e do QMP só valem com ela ligada. " <>
-                "Já dá para usar qemu-img, qemu-io e qemu-system-* -machine help (-cpu help, -version…)."
-            )
-
-            {:noreply, socket}
-          end
+      case Saved.find(input, vm.id) do
+        {:ok, command} -> {:noreply, start_async(socket, key.(:macro), fn -> Macro.run(vm.id, command) end)}
+        :error -> {:noreply, start_async(socket, key.(:exec), fn -> TermTools.execute(vm, input) end)}
       end
+    else
+      _ -> {:noreply, socket}
+    end
+  end
+
+  # ---- the saved commands panel (`terminal.json`)
+
+  def handle_event("saved_open", _params, socket),
+    do: {:noreply, socket |> assign(saved_panel: %{editing: nil, error: nil}, cmds_open: true) |> load_saved()}
+
+  def handle_event("saved_close", _params, socket), do: {:noreply, assign(socket, saved_panel: nil)}
+
+  def handle_event("saved_new", _params, socket) do
+    {:noreply, update(socket, :saved_panel, &%{&1 | editing: blank_saved(), error: nil})}
+  end
+
+  def handle_event("saved_edit", %{"name" => name}, socket) do
+    case Enum.find(socket.assigns.saved, &(&1["name"] == name)) do
+      nil ->
+        {:noreply, socket}
+
+      c ->
+        form = %{
+          "original" => c["name"],
+          "name" => c["name"],
+          "description" => c["description"],
+          "vm" => c["vm"] || "",
+          "steps" => Enum.join(c["steps"], "\n"),
+          "continue_on_error" => c["continue_on_error"]
+        }
+
+        {:noreply, update(socket, :saved_panel, &%{&1 | editing: form, error: nil})}
+    end
+  end
+
+  def handle_event("saved_change", %{"saved" => params}, %{assigns: %{saved_panel: %{editing: form}}} = socket)
+      when is_map(form) do
+    form = form |> Map.merge(Map.take(params, ~w(name description vm steps))) |> Map.put("continue_on_error", params["continue_on_error"] in ["true", "on"])
+    {:noreply, update(socket, :saved_panel, &%{&1 | editing: form})}
+  end
+
+  def handle_event("saved_change", _params, socket), do: {:noreply, socket}
+
+  def handle_event("saved_cancel", _params, socket),
+    do: {:noreply, update(socket, :saved_panel, &%{&1 | editing: nil, error: nil})}
+
+  def handle_event("saved_save", %{"saved" => params}, %{assigns: %{saved_panel: panel}} = socket)
+      when is_map(panel) do
+    original =
+      case panel.editing do
+        %{"original" => o} when o not in [nil, ""] -> o
+        _ -> nil
+      end
+
+    with {:ok, command} <- Saved.validate(params),
+         :ok <- Saved.save(command, original) do
+      {:noreply,
+       socket
+       |> load_saved()
+       |> assign(saved_panel: %{editing: nil, error: nil})
+       |> load_saved()
+       |> put_flash(:info, "Comando salvo: #{command["name"]}")}
+    else
+      {:error, msg} ->
+        form = Map.merge(panel.editing || %{}, Map.take(params, ~w(name description vm steps)))
+        {:noreply, assign(socket, saved_panel: %{panel | editing: form, error: msg})}
+    end
+  end
+
+  def handle_event("saved_save", _params, socket), do: {:noreply, socket}
+
+  def handle_event("saved_delete", %{"name" => name}, socket) do
+    case Saved.delete(name) do
+      :ok -> {:noreply, socket |> load_saved() |> put_flash(:info, "Comando excluído: #{name}")}
+      {:error, msg} -> {:noreply, put_flash(socket, :error, msg)}
+    end
+  end
+
+  def handle_event("saved_run", %{"name" => name}, socket) do
+    with {vm, _rt} <- current(socket), {:ok, command} <- Saved.find(name, vm.id) do
+      key = {:macro, vm.id, System.unique_integer([:positive])}
+      {:noreply, start_async(socket, key, fn -> Macro.run(vm.id, command) end)}
     else
       _ -> {:noreply, socket}
     end
@@ -851,22 +909,12 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("vnc_title", _params, socket), do: {:noreply, socket}
 
   @impl true
-  # a QEMU tool finished (TermTools.run/2): its output goes to the history, and the
-  # page reloads what the tool may have changed (a disk made, resized…)
-  def handle_async({:tool, id, _n}, {:ok, result}, socket) do
-    case result do
-      {:ok, output, status} ->
-        TermTools.log(id, "received", if(output == "", do: "(sem saída)", else: output))
-        if status != 0, do: TermTools.log(id, "error", "saiu com o código #{status}")
+  # a Terminal line or a saved command finished: everything it printed is in the VM's
+  # history already; the page reloads what it may have changed (a disk made, resized…)
+  def handle_async({kind, _id, _n}, {:ok, _result}, socket) when kind in [:exec, :macro],
+    do: {:noreply, prepare_view(socket)}
 
-      {:error, msg} ->
-        TermTools.log(id, "error", msg)
-    end
-
-    {:noreply, prepare_view(socket)}
-  end
-
-  def handle_async({:tool, id, _n}, {:exit, reason}, socket) do
+  def handle_async({kind, id, _n}, {:exit, reason}, socket) when kind in [:exec, :macro] do
     TermTools.log(id, "error", "o comando falhou: #{inspect(reason)}")
     {:noreply, socket}
   end
@@ -957,14 +1005,6 @@ defmodule QemuAdminWeb.AdminLive do
   end
 
   def handle_info({:vm_log, _id, _line}, socket), do: {:noreply, socket}
-
-  # a new run starts its history over (the sequence numbers start at 1 again)
-  def handle_info({:vm_cmd, id, %{dir: "launch"} = entry}, %{assigns: %{selected: id}} = socket) do
-    {:noreply,
-     socket
-     |> assign(cmd_history: [])
-     |> stream(:cmds, [entry], reset: true)}
-  end
 
   def handle_info({:vm_cmd, id, entry}, %{assigns: %{selected: id}} = socket) do
     {:noreply,
@@ -1065,7 +1105,7 @@ defmodule QemuAdminWeb.AdminLive do
         socket
 
       {vm, _rt} ->
-        socket = load_cmds(socket, vm)
+        socket = socket |> load_cmds(vm) |> load_saved()
 
         case socket.assigns.vm_view do
           "overview" ->
@@ -1098,6 +1138,34 @@ defmodule QemuAdminWeb.AdminLive do
             socket
         end
     end
+  end
+
+  # The saved commands (terminal.json) the selected VM has; the panel's list.
+  defp load_saved(socket) do
+    case current(socket) do
+      {vm, _rt} ->
+        error = with {:error, msg} <- Saved.load(), do: msg
+        error = if is_binary(error), do: error
+        panel = socket.assigns.saved_panel
+
+        socket
+        |> assign(saved: Saved.list(vm.id))
+        |> assign(saved_panel: if(panel, do: Map.put(panel, :file_error, error)))
+
+      nil ->
+        socket
+    end
+  end
+
+  defp blank_saved do
+    %{
+      "original" => "",
+      "name" => "",
+      "description" => "",
+      "vm" => "",
+      "steps" => "",
+      "continue_on_error" => false
+    }
   end
 
   # The terminal's history: this VM's, from the running server or the file.
@@ -1989,6 +2057,9 @@ defmodule QemuAdminWeb.AdminLive do
       open={@cmds_open}
       edit={@cmd_edit}
       exe={QemuAdmin.Qemu.exe_name(@vm.arch)}
+      saved={@saved}
+      panel={@saved_panel}
+      saved_path={Saved.path()}
     />
     """
   end

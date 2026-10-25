@@ -46,9 +46,25 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   @doc "The emulator's executable, shown before the edited arguments."
   prop exe, :string, default: ""
 
+  @doc "The saved commands the VM has (`QemuAdmin.Terminal.Saved.list/1`)."
+  prop saved, :list, default: []
+
+  @doc "The saved commands panel: nil (closed) or `%{editing:, error:, file_error:}`."
+  prop panel, :any, default: nil
+
+  @doc "Where the saved commands are (`terminal.json`)."
+  prop saved_path, :string, default: ""
+
+  defp saved_json(saved) do
+    saved
+    |> Enum.map(&Map.take(&1, ["name", "description", "steps"]))
+    |> Jason.encode!()
+  end
+
   defp prefix("launch"), do: "$"
   defp prefix("tool"), do: "$"
   defp prefix("typed"), do: "›"
+  defp prefix("macro"), do: "▶"
   defp prefix("sent"), do: "›"
   defp prefix("hmp"), do: "(qemu)"
   defp prefix("received"), do: "‹"
@@ -59,6 +75,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   defp tone("launch"), do: "text-base-content/45"
   defp tone("tool"), do: "text-primary"
   defp tone("typed"), do: "text-base-content/55"
+  defp tone("macro"), do: "text-warning"
   defp tone("sent"), do: "text-primary"
   defp tone("hmp"), do: "text-primary"
   defp tone("received"), do: "text-base-content/80"
@@ -79,7 +96,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   def render(assigns) do
     ~F"""
     <section id="vm-terminal" class="flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60">
-      <div class="flex h-8 shrink-0 items-center gap-2 px-3 text-xs">
+      <div class="flex min-h-8 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 text-xs">
         <button
           type="button"
           id="cmds-toggle"
@@ -97,6 +114,15 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
         </span>
         <button
           type="button"
+          id="saved-open"
+          phx-click="saved_open"
+          class="shrink-0 whitespace-nowrap rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
+          title="Comandos salvos: um nome que executa uma sequência de comandos"
+        >
+          Comandos salvos
+        </button>
+        <button
+          type="button"
           id="cmd-edit"
           phx-click="cmd_edit"
           class="shrink-0 rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
@@ -105,6 +131,141 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           Editar linha de partida
         </button>
       </div>
+      <section
+        :if={@open and @panel}
+        id="saved-panel"
+        class="max-h-56 space-y-2 overflow-y-auto border-t border-primary/15 px-3 py-2 text-xs"
+      >
+        <div class="flex items-center gap-2">
+          <h4 class="qa-label mb-0 text-primary">Comandos salvos</h4>
+          <span class="min-w-0 flex-1 truncate font-mono text-[0.62rem] text-base-content/40" title={@saved_path}>
+            {@saved_path}
+          </span>
+          <button
+            type="button"
+            id="saved-new"
+            phx-click="saved_new"
+            class="rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
+          >
+            Novo
+          </button>
+          <button
+            type="button"
+            id="saved-close"
+            phx-click="saved_close"
+            class="rounded border border-base-content/20 px-2 py-0.5 text-[0.68rem] hover:bg-base-300"
+          >
+            Fechar
+          </button>
+        </div>
+        <p :if={@panel[:file_error]} class="text-error">{@panel[:file_error]}</p>
+        <p :if={@saved == [] and is_nil(@panel.editing)} class="text-base-content/50">
+          Nenhum comando salvo. Um comando salvo é um nome (como <code class="text-primary/80">start</code>) que executa
+          uma sequência de comandos nesta VM: clique em <strong>Novo</strong>, ou edite o arquivo acima à mão.
+        </p>
+        <ul :if={@saved != []} class="divide-y divide-primary/10 rounded border border-primary/15">
+          <li :for={c <- @saved} id={"saved-#{c["name"]}"} class="flex items-center gap-2 px-2 py-1.5">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-baseline gap-2">
+                <span class="font-mono font-semibold text-primary">{c["name"]}</span>
+                <span :if={c["vm"]} class="rounded bg-base-300 px-1 text-[0.58rem] text-base-content/55">só {c["vm"]}</span>
+                <span class="truncate text-base-content/55">{c["description"]}</span>
+              </div>
+              <div class="truncate font-mono text-[0.62rem] text-base-content/40" title={Enum.join(c["steps"], "  ›  ")}>
+                {Enum.join(c["steps"], "  ›  ")}
+              </div>
+            </div>
+            <button
+              type="button"
+              phx-click="saved_run"
+              phx-value-name={c["name"]}
+              class="rounded bg-success/15 px-2 py-0.5 text-[0.68rem] text-success hover:bg-success/25"
+            >
+              Executar
+            </button>
+            <button
+              type="button"
+              phx-click="saved_edit"
+              phx-value-name={c["name"]}
+              class="rounded border border-base-content/20 px-2 py-0.5 text-[0.68rem] hover:bg-base-300"
+            >
+              Editar
+            </button>
+            <button
+              type="button"
+              phx-click="saved_delete"
+              phx-value-name={c["name"]}
+              data-confirm={"Excluir o comando salvo #{c["name"]}?"}
+              class="rounded border border-error/30 px-2 py-0.5 text-[0.68rem] text-error hover:bg-error/10"
+            >
+              Excluir
+            </button>
+          </li>
+        </ul>
+        <form
+          :if={@panel.editing}
+          id="saved-form"
+          phx-change="saved_change"
+          phx-submit="saved_save"
+          class="space-y-2 rounded border border-primary/20 bg-base-300/30 p-2"
+          autocomplete="off"
+        >
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="qa-label" for="saved_name">Nome (uma palavra)</label>
+              <input id="saved_name" name="saved[name]" value={@panel.editing["name"]} class="qa-field font-mono" placeholder="start" phx-debounce="300" />
+            </div>
+            <div>
+              <label class="qa-label" for="saved_vm">Vale para</label>
+              <select id="saved_vm" name="saved[vm]" class="qa-field">
+                <option value="" selected={@panel.editing["vm"] in [nil, ""]}>Todas as VMs</option>
+                <option value={@vm.id} selected={@panel.editing["vm"] == @vm.id}>Só esta VM ({@vm.name})</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="qa-label" for="saved_description">Descrição</label>
+            <input id="saved_description" name="saved[description]" value={@panel.editing["description"]} class="qa-field" placeholder="Liga a VM e mostra o estado" phx-debounce="300" />
+          </div>
+          <div>
+            <label class="qa-label" for="saved_steps">Passos (um por linha, executados em ordem)</label>
+            <textarea
+              id="saved_steps"
+              name="saved[steps]"
+              rows="5"
+              spellcheck="false"
+              phx-debounce="300"
+              class="qa-field font-mono !text-[0.68rem]"
+              placeholder={"@start\ninfo status\nqemu-img info disk0.qcow2"}
+            >{@panel.editing["steps"]}</textarea>
+            <p class="mt-1 text-[0.62rem] text-base-content/45">
+              Cada passo é como se digita aqui: <code>info registers</code>, <code>{"{\"execute\": \"stop\"}"}</code>, <code>qemu-img info disk0.qcow2</code>.
+              Do app: <code>@start</code> (liga a VM e espera) e <code>@wait 3</code> (segundos).
+              <code>{"{vm}"}</code>, <code>{"{name}"}</code> e <code>{"{dir}"}</code> viram o id, o nome e a pasta da VM. Linhas com # são ignoradas.
+            </p>
+          </div>
+          <label class="flex items-center gap-2">
+            <input type="hidden" name="saved[continue_on_error]" value="false" />
+            <input
+              type="checkbox"
+              name="saved[continue_on_error]"
+              value="true"
+              checked={@panel.editing["continue_on_error"] == true}
+              class="checkbox checkbox-xs checkbox-primary"
+            />
+            Seguir para o próximo passo mesmo se um falhar
+          </label>
+          <p :if={@panel.error} class="text-error">{@panel.error}</p>
+          <div class="flex gap-2">
+            <button type="submit" id="saved-save" class="rounded-md bg-primary px-3 py-1 font-semibold text-primary-content hover:brightness-110">
+              Salvar
+            </button>
+            <button type="button" id="saved-cancel" phx-click="saved_cancel" class="rounded-md border border-base-content/20 px-3 py-1 hover:bg-base-300">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </section>
       <form
         :if={@open and @edit}
         id="cmd-edit-form"
@@ -158,7 +319,11 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           id="vm-cmds"
           phx-hook="CmdLog"
           phx-update="stream"
-          class="h-44 overflow-y-auto border-y border-primary/10 bg-base-300/40 px-3 py-2 font-mono text-[0.68rem] leading-relaxed"
+          class={
+            "overflow-y-auto border-y border-primary/10 bg-base-300/40 px-3 py-2 font-mono text-[0.68rem] leading-relaxed",
+            "h-44": is_nil(@panel) and is_nil(@edit),
+            "h-28": @panel || @edit
+          }
         >
           <div
             :for={{dom_id, e} <- @entries}
@@ -187,6 +352,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             type="text"
             phx-hook="CmdInput"
             data-history={Jason.encode!(@history)}
+            data-saved={saved_json(@saved)}
             spellcheck="false"
             placeholder={
               if stopped?(@rt),

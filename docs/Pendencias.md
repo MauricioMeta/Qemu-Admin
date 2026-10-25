@@ -21,7 +21,7 @@ Nada foi implementado em 2026-10-25 além do que está em [[Estado do Projeto]];
 - [x] **Terminal** — o painel de comandos passou a se chamar Terminal; catálogo de todos os comandos do QEMU gerado ([[Catalogo de comandos]]).
 - [x] **Terminal: sugestões ao digitar** — feito; ver [[Terminal]].
 - [x] **Terminal sem a VM ligada** — qemu-img, qemu-io e `qemu-system-* -machine help` rodam com a VM desligada; ver [[Terminal]].
-- [ ] **Terminal: comandos salvos** (ex.: `start`, em um arquivo JSON) — ver [[Terminal]].
+- [x] **Terminal: comandos salvos** (ex.: `start`, em `terminal.json`) — feito; ver [[Terminal]].
 - [ ] **Limpar settings** — o `settings.json` da pasta de dados pode guardar workspaces temporários na lista de recentes.
 
 ## Contexto

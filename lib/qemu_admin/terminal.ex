@@ -13,7 +13,7 @@ defmodule QemuAdmin.Terminal do
   off, straight into its `commands.log` — the file the next run starts over.
   """
 
-  alias QemuAdmin.{Qemu, Vm, VmServer}
+  alias QemuAdmin.{Qemu, Vm, VmServer, VmSupervisor}
 
   @timeout 30_000
   @max_output 65_536
@@ -149,6 +149,62 @@ defmodule QemuAdmin.Terminal do
     end
   catch
     _, _ -> :ok
+  end
+
+  @doc """
+  What the Terminal does with a line typed (or a step of a saved command):
+  everything it prints, sends and answers goes to the history (`log/3`). `:ok`,
+  or `:error` when it failed — a tool that exits with a code other than 0, a
+  command QEMU refused, a monitor or QMP command with the VM off.
+  """
+  def execute(%Vm{} = vm, input) do
+    input = String.trim(input)
+
+    case route(input) do
+      {:tool, _name} ->
+        log(vm.id, "tool", input)
+
+        case run(vm, input) do
+          {:ok, output, status} ->
+            log(vm.id, "received", if(output == "", do: "(sem saída)", else: output))
+
+            if status == 0 do
+              :ok
+            else
+              log(vm.id, "error", "saiu com o código #{status}")
+              :error
+            end
+
+          {:error, msg} ->
+            log(vm.id, "error", msg)
+            :error
+        end
+
+      {:error, msg} ->
+        log(vm.id, "typed", input)
+        log(vm.id, "error", msg)
+        :error
+
+      :monitor ->
+        if VmSupervisor.running?(vm.id) do
+          # the VmServer logs what it sends, the answer and the QMP errors
+          case VmServer.console(vm.id, input) do
+            {:ok, _} -> :ok
+            _ -> :error
+          end
+        else
+          log(vm.id, "typed", input)
+
+          log(
+            vm.id,
+            "error",
+            "a VM está desligada: os comandos do monitor e do QMP só valem com ela ligada. " <>
+              "Já dá para usar qemu-img, qemu-io e qemu-system-* -machine help (-cpu help, -version…)."
+          )
+
+          :error
+        end
+    end
   end
 
   # ------------------------------------------------------------- history

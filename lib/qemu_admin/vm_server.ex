@@ -20,8 +20,8 @@ defmodule QemuAdmin.VmServer do
   (STOP, RESUME) are not the user's.
 
   What was sent to QEMU is kept as a **command history** (`commands/1`,
-  `commands.log` in the VM's folder, one JSON object per line): the command
-  line the run started with, every QMP command a user action sent and its
+  `commands.log` in the VM's folder, one JSON object per line, the last 500 of
+  them, kept from one run to the next): the command line each run started with, every QMP command a user action sent and its
   answer, the QMP events, and what was typed in the page's command panel
   (`console/2`: a QMP JSON message, or a monitor command such as
   `info registers`, which goes through `human-monitor-command`). The
@@ -120,24 +120,37 @@ defmodule QemuAdmin.VmServer do
   the answer is in the history too.
   """
   def console(id, input) do
-    case String.trim(input) do
-      "" ->
-        {:error, "comando vazio"}
+    result =
+      case String.trim(input) do
+        "" ->
+          {:invalid, "comando vazio"}
 
-      "{" <> _ = json ->
-        case Jason.decode(json) do
-          {:ok, %{"execute" => cmd} = msg} when is_binary(cmd) ->
-            case Map.get(msg, "arguments", %{}) do
-              args when is_map(args) -> qmp(id, cmd, args)
-              _ -> {:error, ~s("arguments" deve ser um objeto)}
-            end
+        "{" <> _ = json ->
+          case Jason.decode(json) do
+            {:ok, %{"execute" => cmd} = msg} when is_binary(cmd) ->
+              case Map.get(msg, "arguments", %{}) do
+                args when is_map(args) -> qmp(id, cmd, args)
+                _ -> {:invalid, ~s("arguments" deve ser um objeto)}
+              end
 
-          _ ->
-            {:error, ~s(JSON QMP inválido; use {"execute": "query-status"})}
-        end
+            _ ->
+              {:invalid, ~s(JSON QMP inválido; use {"execute": "query-status"})}
+          end
 
-      line ->
-        call(id, {:hmp, line})
+        line ->
+          call(id, {:hmp, line})
+      end
+
+    # what the VM answered with an error is in the history already; what was
+    # wrong with the input was never sent, so it is logged here
+    case result do
+      {:invalid, msg} ->
+        _ = log_command(id, "typed", input)
+        _ = log_command(id, "error", msg)
+        {:error, msg}
+
+      other ->
+        other
     end
   end
 
@@ -213,7 +226,16 @@ defmodule QemuAdmin.VmServer do
 
     File.mkdir_p!(Vm.dir(vm))
     {:ok, io} = File.open(log_path(vm.id), [:write, :binary])
-    {:ok, cmd_io} = File.open(commands_path(vm.id), [:write, :binary])
+    # the history goes on from the last run (and from what was typed with the VM
+    # off, a saved command's `@start` among it): the file is kept, cut to the last entries
+    old = commands_file(vm.id)
+
+    File.write!(
+      commands_path(vm.id),
+      Enum.map(old, &[Jason.encode_to_iodata!(&1), "\n"])
+    )
+
+    {:ok, cmd_io} = File.open(commands_path(vm.id), [:append, :binary])
 
     port =
       Port.open({:spawn_executable, exe}, [
@@ -271,8 +293,8 @@ defmodule QemuAdmin.VmServer do
       serial_buf: "",
       serial_total: 0,
       cmd_io: cmd_io,
-      cmds: :queue.new(),
-      cmd_seq: 0
+      cmds: :queue.from_list(old),
+      cmd_seq: if(old == [], do: 0, else: List.last(old).seq)
     }
 
     state =
@@ -289,7 +311,8 @@ defmodule QemuAdmin.VmServer do
 
   @impl true
   def handle_call({:qmp, _cmd, _args}, _from, %{qmp_ready: false} = state) do
-    {:reply, {:error, "QMP ainda não conectado"}, state}
+    msg = "QMP ainda não conectado"
+    {:reply, {:error, msg}, log_cmd(state, "error", msg)}
   end
 
   # with the gdbstub attached, it holds and releases the CPUs
@@ -318,8 +341,9 @@ defmodule QemuAdmin.VmServer do
     {:noreply, send_qmp(state, cmd, args, from)}
   end
 
-  def handle_call({:hmp, _line}, _from, %{qmp_ready: false} = state) do
-    {:reply, {:error, "QMP ainda não conectado"}, state}
+  def handle_call({:hmp, line}, _from, %{qmp_ready: false} = state) do
+    msg = "QMP ainda não conectado"
+    {:reply, {:error, msg}, state |> log_cmd("hmp", line) |> log_cmd("error", msg)}
   end
 
   def handle_call({:hmp, line}, from, state) do

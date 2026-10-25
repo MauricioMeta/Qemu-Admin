@@ -53,6 +53,37 @@ Enquanto você digita, o prompt sugere comandos do [[Catalogo de comandos]], cad
 - Teclas: **↑ / ↓** escolhem, **Tab** aceita, **Esc** fecha, **Enter** envia o que está digitado (ou aceita, se você escolheu um item com as setas); o clique também aceita. Sem sugestões abertas, ↑ / ↓ voltam a percorrer o histórico.
 - O navegador baixa o catálogo (`GET /terminal/commands.json`, `TerminalController`, com ETag: só baixa de novo se o arquivo mudou) e filtra no próprio navegador; o código está no hook `CmdInput` (`assets/js/hooks/cmd_input.js`).
 
+## Comandos salvos
+Um **comando salvo** é um nome (como `start`) que executa uma sequência de comandos na VM selecionada. Ficam em **`terminal.json`, na raiz do workspace** (`Workspace_Qemu/terminal.json`), um arquivo que também dá para editar à mão; o app o lê toda vez que precisa.
+
+```json
+{
+  "version": 1,
+  "commands": [
+    {
+      "name": "start",
+      "description": "Liga a placa, espera e mostra o estado",
+      "vm": null,
+      "steps": ["@start", "@wait 1", "info status", "{\"execute\": \"query-status\"}"],
+      "continue_on_error": false
+    }
+  ]
+}
+```
+
+- **`name`**: uma palavra (letras, números, `.`, `_`, `-`; até 40). Digitar o nome no Terminal e dar Enter executa o comando. **Um nome salvo vale antes de um comando do monitor igual** (um `stop` salvo esconde o `stop` do monitor nessa VM).
+- **`vm`**: o id de uma VM (o comando só existe para ela) ou `null` (todas).
+- **`steps`**: o que executar, em ordem; cada passo é como se digita no Terminal (ferramenta do QEMU, comando do monitor, mensagem QMP). Linhas em branco e as que começam com `#` são ignoradas. Do app, só estes dois:
+  - `@start`: liga a VM e **espera** até o QEMU estar rodando (até 30 s); se já está ligada, não faz nada;
+  - `@wait N`: espera N segundos (até 120).
+  - `{vm}`, `{name}` e `{dir}` num passo viram o id, o nome e a pasta da VM (`qemu-img info {dir}/disk0.qcow2`).
+- **`continue_on_error`**: por padrão a execução **para no primeiro passo que falha** (ferramenta com código de saída diferente de 0, comando que o QEMU recusou, monitor/QMP com a VM desligada); com `true` segue para o próximo.
+- No histórico: `▶ start — 4 passos`, os passos como se tivessem sido digitados e `▶ start — concluído` (ou `interrompido no passo N de M`). Roda fora da página: dá para continuar usando o app.
+
+**Gerenciar pela página:** o botão **Comandos salvos** (cabeçalho do Terminal) mostra o caminho do arquivo e a lista, com **Executar**, **Editar** e **Excluir**, e **Novo** abre o formulário (nome, descrição, "vale para" todas as VMs ou só esta, passos, seguir se falhar). Os comandos salvos aparecem nas sugestões ao digitar, primeiro, com a etiqueta `salvo` e a lista de passos. Se o arquivo não for um JSON válido, a lista mostra o erro e a página **não o sobrescreve**.
+
+Código: `QemuAdmin.Terminal.Saved` (arquivo, validação), `QemuAdmin.Terminal.Macro` (execução) e `QemuAdmin.Terminal.execute/2` (cada passo).
+
 ## Editar a linha de partida
 O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.
 
@@ -66,7 +97,7 @@ O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor 
 
 ## Onde fica
 - `VmServer.commands/1` e `VmServer.console/2`; cada entrada vira `{:vm_cmd, id, entry}` no PubSub.
-- O histórico é gravado em `commands.log` na pasta da VM (um JSON por linha, recomeçado a cada execução); guarda as últimas 500 entradas.
+- O histórico é gravado em `commands.log` na pasta da VM (um JSON por linha); guarda as últimas 500 entradas, de uma execução para a outra: a linha `$` marca onde cada execução começou.
 - Para aprender: a linha `$` mostra os argumentos reais; `Configuração → Argumentos extras do QEMU` aplica novos argumentos no próximo boot.
 
 ## Pendente
@@ -74,5 +105,7 @@ O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor 
 - [x] **Sugestões ao digitar**: nome, uso e descrição de cada comando, a partir do [[Catalogo de comandos]].
 - [ ] Traduzir as descrições do catálogo (hoje em inglês, como o QEMU as escreve).
 - [ ] Sugerir também os argumentos dos comandos do monitor e os valores dos enums dentro de uma mensagem QMP.
-- [ ] **Comandos salvos**: um arquivo JSON onde o usuário guarda comandos com nome (ex.: `start`), cada um com uma sequência de comandos executada na VM selecionada.
+- [x] **Comandos salvos** em `terminal.json`.
+- [ ] Salvar a partir do histórico (um botão que transforma o que foi digitado num comando salvo).
+- [ ] Um passo `@stop`/`@desligar` e argumentos nos comandos salvos (`start 3`)?
 - [ ] Teste do app aberto em janela larga: o painel ocupa ~11 rem e aperta a página em janelas baixas (dá para recolher).

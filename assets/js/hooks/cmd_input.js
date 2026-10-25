@@ -5,7 +5,8 @@
 //  * Suggestions: as you type, the commands of QEMU (priv/terminal/commands.json,
 //    served at /terminal/commands.json) that fit, each with its usage and
 //    description — monitor commands (`info registers`), QMP commands (picked in
-//    the plain prompt they become `{"execute": "..."}`), the QEMU tools that need
+//    the plain prompt they become `{"execute": "..."}`), the saved commands (the
+//    names in terminal.json, `data-saved`, listed first), the QEMU tools that need
 //    no VM running (qemu-img, qemu-io, qemu-system-* -machine help…) and, inside a QMP
 //    message, the command's names and arguments. ↑/↓ choose, Tab accepts, Esc
 //    closes, Enter sends what is typed (or accepts, once an item was chosen
@@ -71,7 +72,7 @@ function placeholder(arg) {
 
 // what to offer for `text` (the caret at its end): {items, hint}
 //   item: {entry, apply: {text, caret}}, hint: an entry to describe even with no list
-function suggest(cat, text) {
+function suggest(cat, text, saved) {
   const trimmed = text.trimStart()
   if (trimmed === "") return {items: [], hint: null}
 
@@ -80,6 +81,14 @@ function suggest(cat, text) {
   const p = trimmed.toLowerCase()
   const items = []
   const seen = new Set()
+
+  // the user's own saved commands: by their name, before everything else
+  for (const c of saved) {
+    if (c.name.toLowerCase().startsWith(p)) {
+      items.push({entry: {kind: "saved", ...c}, apply: {text: c.name, caret: c.name.length}})
+    }
+  }
+  const exact = saved.find((c) => c.name.toLowerCase() === p)
 
   // monitor commands whose name (or alias) starts with what is typed
   for (const e of cat.hmp) {
@@ -106,7 +115,7 @@ function suggest(cat, text) {
   }
 
   // a monitor command already complete and followed by its arguments: describe it
-  let hint = null
+  let hint = exact ? {kind: "saved", ...exact} : null
   if (items.length === 0) {
     const hit = cat.hmpNames.find(([n]) => p === n || p.startsWith(n + " "))
     if (hit) hint = hit[1]
@@ -178,6 +187,15 @@ function describe(entry) {
     return box
   }
 
+  if (entry.kind === "saved") {
+    const box = el("div", "space-y-1")
+    box.append(el("div", "font-mono text-primary", entry.name))
+    box.append(el("div", "", entry.description || "comando salvo"))
+    box.append(el("div", "text-base-content/40", "executa, em ordem:"))
+    entry.steps.forEach((step, i) => box.append(el("div", "pl-2 font-mono", `${i + 1}. ${step}`)))
+    return box
+  }
+
   const head = el("div", "font-mono text-primary", entry.name)
   if ((entry.kind === "hmp" || entry.kind === "tool") && entry.usage)
     head.append(el("span", "ml-2 text-base-content/60", entry.usage))
@@ -238,6 +256,14 @@ export const CmdInput = {
         this.close()
       }, 0)
     })
+  },
+
+  saved() {
+    try {
+      return JSON.parse(this.el.dataset.saved || "[]")
+    } catch (_) {
+      return []
+    }
   },
 
   history() {
@@ -301,7 +327,7 @@ export const CmdInput = {
 
   refresh() {
     if (!this.cat || document.activeElement !== this.el || this.el.disabled) return this.close()
-    const {items, hint} = suggest(this.cat, this.el.value)
+    const {items, hint} = suggest(this.cat, this.el.value, this.saved())
     this.items = items
     this.hint = hint
     this.sel = 0
@@ -353,13 +379,24 @@ export const CmdInput = {
                   ? "bg-warning/15 text-warning"
                   : e.kind === "tool"
                     ? "bg-secondary/15 text-secondary"
-                    : "bg-success/15 text-success"),
-            e.kind === "qmp" ? "QMP" : e.kind === "arg" ? "arg" : e.kind === "tool" ? "ferramenta" : "monitor",
+                    : e.kind === "saved"
+                      ? "bg-primary/20 text-primary"
+                      : "bg-success/15 text-success"),
+            e.kind === "qmp"
+              ? "QMP"
+              : e.kind === "arg"
+                ? "arg"
+                : e.kind === "tool"
+                  ? "ferramenta"
+                  : e.kind === "saved"
+                    ? "salvo"
+                    : "monitor",
           ),
         )
         const desc = e.kind === "arg" ? e.arg.description || "" : e.description
+        const steps = e.kind === "saved" ? `${e.steps.length} passo(s)  ` : ""
         const usage = (e.kind === "hmp" || e.kind === "tool") && e.usage ? e.usage + "  " : ""
-        row.append(el("span", "min-w-0 flex-1 truncate text-base-content/55", usage + desc))
+        row.append(el("span", "min-w-0 flex-1 truncate text-base-content/55", steps + usage + desc))
         // mousedown, not click: the input must keep the focus
         row.addEventListener("mousedown", (ev) => {
           ev.preventDefault()
