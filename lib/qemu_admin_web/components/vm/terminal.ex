@@ -83,9 +83,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           <.icon name="hero-command-line" class="size-4" />
           <span class="qa-label mb-0">Terminal</span>
         </button>
-        <span class="min-w-0 flex-1 truncate text-[0.65rem] text-base-content/40">
-          o que foi enviado ao QEMU (QMP) · envie o seu: comando do monitor ou JSON
-        </span>
+        <span class="min-w-0 flex-1" />
         <span :if={@vm.command not in [nil, ""]} class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning">
           linha de partida editada
         </span>
