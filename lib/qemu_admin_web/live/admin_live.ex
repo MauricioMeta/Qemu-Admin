@@ -2273,15 +2273,6 @@ defmodule QemuAdminWeb.AdminLive do
         {/if}
         {#if stopped?(@rt)}
           <IconButton
-            id="vm-start"
-            title="Ligar"
-            click="start_vm"
-            value={@vm.id}
-            icon="hero-play-solid"
-            tone="success"
-            disabled={is_nil(@qemu.dir)}
-          />
-          <IconButton
             id="vm-clone"
             title="Clonar"
             click="clone_vm"
@@ -2296,52 +2287,6 @@ defmodule QemuAdminWeb.AdminLive do
             icon="hero-trash"
             tone="error"
             confirm={"Excluir \"#{@vm.name}\"? A pasta da VM, com os discos dentro dela, vai junto."}
-          />
-        {#else}
-          {#if paused?(@rt)}
-            <IconButton
-              id="vm-resume"
-              title="Continuar"
-              click="resume_vm"
-              value={@vm.id}
-              icon="hero-play-solid"
-              tone="success"
-            />
-          {#else}
-            <IconButton
-              id="vm-pause"
-              title="Pausar"
-              click="pause_vm"
-              value={@vm.id}
-              icon="hero-pause-solid"
-            />
-          {/if}
-          <IconButton
-            id="vm-reset"
-            title="Reiniciar (reset)"
-            click="reset_vm"
-            value={@vm.id}
-            icon="hero-arrow-path"
-            tone="warning"
-            confirm="Reiniciar a VM agora? É como apertar o botão de reset."
-          />
-          <IconButton
-            id="vm-powerdown"
-            title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
-            click="powerdown_vm"
-            value={@vm.id}
-            icon="hero-power"
-            tone="warning"
-          />
-          <IconButton
-            :if={is_nil(Vm.board(@vm))}
-            id="vm-quit"
-            title="Forçar desligamento"
-            click="quit_vm"
-            value={@vm.id}
-            icon="hero-bolt-slash"
-            tone="error"
-            confirm="Forçar o desligamento? É como tirar da tomada."
           />
         {/if}
       </:buttons>
@@ -2410,7 +2355,67 @@ defmodule QemuAdminWeb.AdminLive do
       history={@cmd_history}
       open={@cmds_open}
       saved={@saved}
-    />
+    >
+      <:controls>
+        {#if stopped?(@rt)}
+          <IconButton
+            id="vm-start"
+            title="Ligar"
+            click="start_vm"
+            value={@vm.id}
+            icon="hero-play-solid"
+            tone="success"
+            disabled={is_nil(@qemu.dir)}
+          />
+        {#else}
+          {#if paused?(@rt)}
+            <IconButton
+              id="vm-resume"
+              title="Continuar"
+              click="resume_vm"
+              value={@vm.id}
+              icon="hero-play-solid"
+              tone="success"
+            />
+          {#else}
+            <IconButton
+              id="vm-pause"
+              title="Pausar"
+              click="pause_vm"
+              value={@vm.id}
+              icon="hero-pause-solid"
+            />
+          {/if}
+          <IconButton
+            id="vm-reset"
+            title="Reiniciar (reset)"
+            click="reset_vm"
+            value={@vm.id}
+            icon="hero-arrow-path"
+            tone="warning"
+            confirm="Reiniciar a VM agora? É como apertar o botão de reset."
+          />
+          <IconButton
+            id="vm-powerdown"
+            title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
+            click="powerdown_vm"
+            value={@vm.id}
+            icon="hero-power"
+            tone="warning"
+          />
+          <IconButton
+            :if={is_nil(Vm.board(@vm))}
+            id="vm-quit"
+            title="Forçar desligamento"
+            click="quit_vm"
+            value={@vm.id}
+            icon="hero-bolt-slash"
+            tone="error"
+            confirm="Forçar o desligamento? É como tirar da tomada."
+          />
+        {/if}
+      </:controls>
+    </Terminal>
     """
   end
 end

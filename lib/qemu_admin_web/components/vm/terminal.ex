@@ -32,6 +32,9 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   alias Phoenix.LiveView.JS
   alias QemuAdmin.Terminal.Groups
 
+  @doc "The VM's power controls (start, pause, reset, power off): commands, so they live here."
+  slot controls
+
   prop vm, :struct, required: true
   prop rt, :map, required: true
 
@@ -126,6 +129,9 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           <.icon name="hero-command-line" class="size-4" />
           <span class="text-[0.62rem] font-semibold uppercase leading-none tracking-[0.06em] text-base-content/60">Terminal</span>
         </button>
+        <div :if={slot_assigned?(:controls)} id="vm-controls" class="flex items-center gap-0.5 border-l border-primary/20 pl-2">
+          <#slot {@controls} />
+        </div>
         <span class="min-w-0 flex-1" />
         <button
           :if={@vm.command not in [nil, ""]}

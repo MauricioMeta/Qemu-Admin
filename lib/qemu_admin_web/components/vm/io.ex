@@ -9,7 +9,6 @@ defmodule QemuAdminWeb.Components.Vm.Io do
 
   use Surface.Component
 
-  import QemuAdminWeb.CoreComponents, only: [icon: 1]
   import QemuAdminWeb.VmHelpers
 
   alias QemuAdmin.Board
@@ -57,13 +56,7 @@ defmodule QemuAdminWeb.Components.Vm.Io do
       {!-- by the width of this view, not the window's: beside the serial it is one column --}
       <div class="grid gap-3 @3xl:gap-4 @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <section class="qa-card p-4">
-          <div class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-            <.icon name="hero-cpu-chip" class="size-4 text-primary" />
-            <span class="font-semibold">{@board.name}</span>
-            <span class="text-base-content/45">{@board.chip}</span>
-            <span class="hidden flex-1 @xl:block" />
-            <span class={"w-full text-[0.68rem] text-base-content/50 @xl:w-auto", "text-error": match?(%{status: :error}, @gpio)}>{status(@gpio, @rt)}</span>
-          </div>
+          <p :if={match?(%{status: :error}, @gpio)} class="mb-3 text-xs text-error">{status(@gpio, @rt)}</p>
           <div class="mx-auto max-w-3xl">
             <BoardSvg board={@board} gpio={@gpio} on={running?(@rt)} />
           </div>

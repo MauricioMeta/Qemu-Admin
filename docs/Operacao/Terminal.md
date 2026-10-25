@@ -144,3 +144,6 @@ Na página **Comandos** (ícone da barra lateral), a seção **Linha de partida*
 - [ ] Entregar `parar`/`retomar`/`desligar` já cadastrados num `terminal.json` novo (hoje o usuário os cria).
 - [ ] Um passo `@stop`/`@desligar` e argumentos nos comandos salvos (`start 3`)?
 - [ ] Teste do app aberto em janela larga: o painel ocupa ~11 rem e aperta a página em janelas baixas (dá para recolher).
+
+## Controles da VM no cabeçalho do Terminal
+Ligar, pausar/continuar, reiniciar, desligar e forçar o desligamento são comandos, então ficam no **início do cabeçalho do Terminal** (`#vm-controls`, depois do título), e não mais na barra de cima. A barra sob as abas ficou com as vistas da VM e, à direita, clonar, excluir e os botões de cada vista (limpar a serial, VNC).
