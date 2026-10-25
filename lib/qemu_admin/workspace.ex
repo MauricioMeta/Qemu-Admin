@@ -94,6 +94,33 @@ defmodule QemuAdmin.Workspace do
     end
   end
 
+  @doc """
+  Shows `dir` (the current workspace by default) in the system's file
+  manager — Explorer on Windows. The manager runs on this machine, which is
+  the user's: the app is local.
+  """
+  def reveal(dir \\ current()) do
+    dir = Path.expand(dir)
+
+    {program, args} =
+      case :os.type() do
+        # `start` makes the shell open the window in the user's session;
+        # explorer.exe started straight from the VM opens it hidden
+        {:win32, _} -> {"cmd.exe", ["/c", "start", "", String.replace(dir, "/", "\\")]}
+        {:unix, :darwin} -> {"open", [dir]}
+        _ -> {"xdg-open", [dir]}
+      end
+
+    with true <- File.dir?(dir),
+         exe when is_binary(exe) <- System.find_executable(program) do
+      # Explorer exits 1 even when it opened the folder: the status says nothing
+      spawn(fn -> System.cmd(exe, args) end)
+      :ok
+    else
+      _ -> {:error, "não foi possível abrir #{dir}"}
+    end
+  end
+
   defp recent_paths, do: Settings.get(:recent_workspaces) || []
 
   defp same?(a, b), do: key(a) == key(b)

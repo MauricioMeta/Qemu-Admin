@@ -20,7 +20,7 @@ defmodule QemuAdminWeb.Components.Vm.Io do
   prop board, :map, required: true
 
   @doc "`QemuAdmin.Gpio.snapshot/1` (nil when off)."
-  prop gpio, :map, default: nil
+  prop gpio, :any, default: nil
 
   defp label(board, g) do
     pin = Enum.find(Board.pins(board), &(&1.ref == g))

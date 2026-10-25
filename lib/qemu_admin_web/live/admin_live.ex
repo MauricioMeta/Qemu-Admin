@@ -540,6 +540,13 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("open_workspace", %{"path" => path}, socket),
     do: {:noreply, open_workspace(socket, path)}
 
+  def handle_event("reveal_workspace", _params, socket) do
+    case Workspace.reveal() do
+      :ok -> {:noreply, socket}
+      {:error, msg} -> {:noreply, put_flash(socket, :error, msg)}
+    end
+  end
+
   def handle_event("forget_workspace", %{"path" => path}, socket) do
     Workspace.forget(path)
     {:noreply, assign(socket, workspaces: Workspace.list())}

@@ -113,6 +113,15 @@ defmodule QemuAdminWeb.Components.Vm.List do
         </div>
         <button
           type="button"
+          id="reveal-workspace"
+          phx-click="reveal_workspace"
+          title="Abrir a pasta do workspace no Explorer"
+          class="grid size-6 place-items-center rounded text-base-content/55 hover:bg-base-300 hover:text-primary"
+        >
+          <.icon name="hero-folder-open" class="size-4" />
+        </button>
+        <button
+          type="button"
           id="new-vm"
           phx-click="new_vm"
           title="Nova VM"

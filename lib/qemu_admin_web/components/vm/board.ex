@@ -17,7 +17,7 @@ defmodule QemuAdminWeb.Components.Vm.Board do
   prop board, :map, required: true
 
   @doc "`QemuAdmin.Gpio.snapshot/1`, nil when the board is off."
-  prop gpio, :map, default: nil
+  prop gpio, :any, default: nil
 
   prop compact, :boolean, default: false
 
