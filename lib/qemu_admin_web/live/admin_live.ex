@@ -52,7 +52,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdmin.Esp32.Flash, as: EspFlash
   alias QemuAdmin.Qemu.{Img, InstallJob}
   alias QemuAdmin.Terminal, as: TermTools
-  alias QemuAdmin.Terminal.{Groups, Macro, Saved}
+  alias QemuAdmin.Terminal.{Catalog, Groups, Macro, Saved}
   alias QemuAdmin.Vm.Args
   alias QemuAdminWeb.Files
 
@@ -69,6 +69,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdminWeb.Components.Files.Picker
   alias QemuAdminWeb.Components.Pages.{Disks, SettingsNav}
   alias QemuAdminWeb.Components.Pages.Commands, as: CommandsPage
+  alias QemuAdminWeb.Components.Pages.Catalog, as: CatalogPage
   alias QemuAdminWeb.Components.Pages.Images, as: ImagesPage
   alias QemuAdminWeb.Components.Pages.Qemu, as: QemuPage
   alias QemuAdminWeb.Components.Pages.Settings, as: SettingsPage
@@ -145,6 +146,7 @@ defmodule QemuAdminWeb.AdminLive do
     "images" => "Imagens",
     "qemu" => "QEMU",
     "commands" => "Comandos",
+    "catalog" => "Catálogo",
     "settings" => "Configurações"
   }
 
@@ -204,7 +206,8 @@ defmodule QemuAdminWeb.AdminLive do
        saved: [],
        cp: %{editing: nil, error: nil},
        cp_commands: [],
-       cp_file_error: nil
+       cp_file_error: nil,
+       cat: blank_cat()
      )
      |> stream_configure(:log, dom_id: &"log-#{&1.id}")
      |> stream(:log, [])
@@ -248,6 +251,9 @@ defmodule QemuAdminWeb.AdminLive do
 
   def handle_event("nav", %{"view" => "commands"}, socket),
     do: {:noreply, socket |> assign(view: "commands", mode: nil) |> load_commands()}
+
+  def handle_event("nav", %{"view" => "catalog"}, socket),
+    do: {:noreply, socket |> assign(view: "catalog", mode: nil) |> load_commands()}
 
   def handle_event("nav", %{"view" => "settings"}, socket),
     do: {:noreply, assign(socket, view: "settings", mode: nil)}
@@ -686,6 +692,94 @@ defmodule QemuAdminWeb.AdminLive do
       end
     else
       _ -> {:noreply, socket}
+    end
+  end
+
+  # ---- the Catálogo page: QEMU's commands, searched, filtered and filled in
+
+  def handle_event("cat_search", %{"q" => q}, socket) do
+    {total, found} = Catalog.search(q)
+    {:noreply, update(socket, :cat, &%{&1 | gq: q, gres: found, gtotal: total, gopen: true})}
+  end
+
+  def handle_event("cat_search_focus", _params, socket),
+    do: {:noreply, update(socket, :cat, &%{&1 | gopen: true})}
+
+  def handle_event("cat_search_close", _params, socket),
+    do: {:noreply, update(socket, :cat, &%{&1 | gopen: false})}
+
+  # Enter in the search box: the best result.
+  def handle_event("cat_search_enter", _params, socket) do
+    case socket.assigns.cat.gres do
+      [e | _] -> {:noreply, cat_pick(socket, e)}
+      [] -> {:noreply, socket}
+    end
+  end
+
+  def handle_event("cat_pick", %{"id" => id}, socket) do
+    case Catalog.get(id) do
+      nil -> {:noreply, socket}
+      e -> {:noreply, cat_pick(socket, e)}
+    end
+  end
+
+  def handle_event("cat_filter", %{"q" => q}, socket),
+    do: {:noreply, update(socket, :cat, &%{&1 | q: q})}
+
+  def handle_event("cat_kind", %{"kind" => kind}, socket) when kind in ~w(all hmp qmp event tool),
+    do: {:noreply, update(socket, :cat, &%{&1 | kind: kind})}
+
+  def handle_event("cat_select", %{"id" => id}, socket) do
+    {:noreply,
+     update(socket, :cat, fn cat ->
+       if cat.sel == id, do: %{cat | sel: nil, vals: %{}}, else: %{cat | sel: id, vals: %{}}
+     end)}
+  end
+
+  def handle_event("cat_vals", params, socket) do
+    vals = for {k, v} <- Map.get(params, "v", %{}), is_binary(v), into: %{}, do: {k, v}
+    {:noreply, update(socket, :cat, &%{&1 | vals: vals, to: Map.get(params, "to", &1.to)})}
+  end
+
+  # Sends the filled-in line to the selected VM's Terminal: it runs apart from the
+  # page and shows in the history like anything typed there.
+  def handle_event("cat_send", params, socket) do
+    socket = apply_cat_params(socket, params)
+
+    with {vm, _rt} <- current(socket),
+         line when is_binary(line) <- cat_line(socket) do
+      key = {:exec, vm.id, System.unique_integer([:positive])}
+
+      {:noreply,
+       socket
+       |> start_async(key, fn -> TermTools.execute(vm, line, "catálogo") end)
+       |> put_flash(:info, "Enviado ao Terminal de #{vm.name}: #{line}")}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "Selecione uma VM para receber o comando")}
+    end
+  end
+
+  # The line as a step: of the saved command chosen, or the start of a new one.
+  def handle_event("cat_step", params, socket) do
+    socket = apply_cat_params(socket, params)
+
+    case cat_line(socket) do
+      nil ->
+        {:noreply, socket}
+
+      line ->
+        case socket.assigns.cat.to do
+          "" ->
+            form = Map.put(blank_saved(), "steps", line)
+
+            {:noreply,
+             socket
+             |> assign(view: "commands", mode: nil, cp: %{editing: form, error: nil})
+             |> load_commands()}
+
+          name ->
+            {:noreply, cat_add_step(socket, name, line)}
+        end
     end
   end
 
@@ -1151,7 +1245,7 @@ defmodule QemuAdminWeb.AdminLive do
       session["view"] == "vms" and session["selected"] in tabs ->
         open_vm(socket, session["selected"])
 
-      session["view"] in ~w(disks images qemu commands settings) ->
+      session["view"] in ~w(disks images qemu commands catalog settings) ->
         {:noreply, socket} = handle_event("nav", %{"view" => session["view"]}, socket)
         socket
 
@@ -1235,6 +1329,48 @@ defmodule QemuAdminWeb.AdminLive do
     Map.new(vms, fn {vm, _rt} ->
       {vm.id, if(vm.command in [nil, ""], do: Args.template(vm), else: vm.command)}
     end)
+  end
+
+  defp blank_cat do
+    %{q: "", kind: "all", sel: nil, vals: %{}, to: "", gq: "", gres: [], gtotal: 0, gopen: false}
+  end
+
+  defp apply_cat_params(socket, params) do
+    case params do
+      %{"v" => _} -> elem(handle_event("cat_vals", params, socket), 1)
+      %{"to" => _} -> elem(handle_event("cat_vals", params, socket), 1)
+      _ -> socket
+    end
+  end
+
+  # A result was chosen: the table narrows to it and its editor opens.
+  defp cat_pick(socket, e) do
+    update(socket, :cat, &%{&1 | kind: "all", q: e.name, sel: e.id, vals: %{}, gopen: false})
+  end
+
+  defp cat_line(%{assigns: %{cat: %{sel: sel, vals: vals}}}) when is_binary(sel) do
+    with %{} = e <- Catalog.get(sel), do: Catalog.line(e, vals)
+  end
+
+  defp cat_line(_socket), do: nil
+
+  defp cat_add_step(socket, name, line) do
+    with {:ok, commands} <- Saved.load(),
+         %{} = c <- Enum.find(commands, &(&1["name"] == name)),
+         {:ok, command} <- Saved.validate(%{c | "steps" => c["steps"] ++ [line]}),
+         :ok <- Saved.save(command, name) do
+      socket |> load_commands() |> put_flash(:info, "Passo adicionado a #{name}: #{line}")
+    else
+      {:error, msg} -> put_flash(socket, :error, msg)
+      _ -> put_flash(socket, :error, "Comando salvo não encontrado: #{name}")
+    end
+  end
+
+  defp vm_name(socket_assigns) do
+    case find_vm(socket_assigns.vms, socket_assigns.selected) do
+      {vm, _rt} -> vm.name
+      nil -> nil
+    end
   end
 
   # Every saved command (terminal.json), for the Comandos page.
@@ -1883,6 +2019,14 @@ defmodule QemuAdminWeb.AdminLive do
           {#elseif @view == "qemu"}
             {header_bar(assign(assigns, crumbs: ["QEMU"]))}
             <QemuPage qemu={@qemu} install={@install} install_esp={@install_esp} />
+          {#elseif @view == "catalog"}
+            {header_bar(assign(assigns, crumbs: ["Catálogo", "comandos do QEMU"]))}
+            <CatalogPage
+              cat={@cat}
+              entries={Catalog.all()}
+              saved={Enum.map(@cp_commands, & &1["name"])}
+              vm_name={vm_name(assigns)}
+            />
           {#elseif @view == "commands"}
             {header_bar(assign(assigns, crumbs: ["Comandos", "terminal.json"]))}
             <CommandsPage

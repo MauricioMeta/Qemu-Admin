@@ -155,4 +155,48 @@ hmp: info status"}) |> render_submit()
     render_hook(view, "window_close", %{})
     assert_push_event(view, "qa:close-window", %{})
   end
+
+  test "the Catálogo page: search, table filter, argument editor, adding a step", %{conn: conn} do
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#nav-catalog") |> render_click()
+    assert has_element?(view, "#catalog")
+    view |> form("#cat-filter", q: "stop") |> render_change()
+    assert has_element?(view, "[id='cat-row-qmp:stop']")
+
+    # the table filter narrows by name or description
+    view |> form("#cat-filter", q: "zzzqqqxxx") |> render_change()
+    assert render(view) =~ "Nenhum comando com esse filtro"
+    view |> form("#cat-filter", q: "") |> render_change()
+    view |> element("#cat-tab-event") |> render_click()
+    refute has_element?(view, "[id='cat-row-qmp:stop']")
+    view |> element("#cat-tab-all") |> render_click()
+
+    # the full-text search lists results; picking one opens its editor
+    html = view |> form("#cat-search-form", q: "eject") |> render_change()
+    assert html =~ "cat-results"
+    view |> element("#cat-results button[phx-value-id='qmp:eject']") |> render_click()
+    assert has_element?(view, "#cat-editor-row")
+
+    view |> form("#cat-form", v: %{"id" => "cd0"}, to: "") |> render_change()
+    assert view |> element("#cat-line") |> render() =~ "qmp: eject"
+
+    # no VM selected: nothing to send to
+    assert has_element?(view, "#cat-send[disabled]")
+
+    # as a step of a new saved command: the Comandos form opens with it
+    view |> element("#cat-step") |> render_click()
+    assert has_element?(view, "#cp-form")
+    assert render(view) =~ "qmp: eject"
+  end
+
+  test "the Catálogo adds a step to an existing saved command", %{conn: conn} do
+    :ok = QemuAdmin.Terminal.Saved.save(%{"name" => "parar", "description" => "", "vm" => nil, "steps" => ["qmp: stop"], "continue_on_error" => false})
+    {:ok, view, _html} = live(conn, "/")
+    view |> element("#nav-catalog") |> render_click()
+    view |> form("#cat-filter", q: "cont") |> render_change()
+    view |> element("[id='cat-row-qmp:cont']") |> render_click()
+    view |> form("#cat-form", to: "parar") |> render_change()
+    view |> element("#cat-step") |> render_click()
+    assert [%{"steps" => ["qmp: stop", "qmp: cont"]}] = QemuAdmin.Terminal.Saved.list("x")
+  end
 end

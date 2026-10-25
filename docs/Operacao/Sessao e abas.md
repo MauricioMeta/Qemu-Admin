@@ -22,7 +22,7 @@ O app **lembra o que estava aberto**: as abas das VMs, a que estava na tela, a t
 
 | Campo | O que é |
 | --- | --- |
-| `view` | a página: `vms`, `disks`, `images`, `qemu`, `commands` ou `settings` |
+| `view` | a página: `vms`, `disks`, `images`, `qemu`, `commands`, `catalog` ou `settings` |
 | `selected` | a VM na tela (só vale com `view` = `vms`) |
 | `tabs` | as abas abertas, em ordem |
 | `views` | a tela de cada aba (`overview`, `console` = a aba Serial, `io` = Placa, `flash`, `config`, `log`, `firmware`) |
