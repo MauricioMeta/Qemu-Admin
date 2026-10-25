@@ -70,7 +70,6 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdminWeb.Components.Pages.Settings, as: SettingsPage
 
   alias QemuAdminWeb.Components.Vm.{
-    Commands,
     Console,
     CortexFirmware,
     Firmware,
@@ -82,7 +81,8 @@ defmodule QemuAdminWeb.AdminLive do
     Overview,
     SdCard,
     SerialConsole,
-    StatusDot
+    StatusDot,
+    Terminal
   }
 
   alias QemuAdminWeb.Components.Vm.List, as: VmList
@@ -566,7 +566,7 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("cmds_toggle", _params, socket),
     do: {:noreply, update(socket, :cmds_open, &(not &1))}
 
-  # The launch line, edited in the command panel: `cmd_edit` is nil or
+  # The launch line, edited in the terminal: `cmd_edit` is nil or
   # `%{text:, error:}`; saving keeps it in the VM (`command`), empty restores
   # the one the app builds.
   def handle_event("cmd_edit", _params, socket) do
@@ -641,7 +641,7 @@ defmodule QemuAdminWeb.AdminLive do
         # the answer is in the history (the VmServer logs it and broadcasts it)
         case VmServer.console(vm.id, input) do
           {:error, msg} when is_binary(msg) and msg != "" ->
-            {:noreply, put_flash(socket, :error, "Comando: #{msg}")}
+            {:noreply, put_flash(socket, :error, "Terminal: #{msg}")}
 
           _ ->
             {:noreply, socket}
@@ -1052,7 +1052,7 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
-  # The command panel's history: this VM's, from the running server or the file.
+  # The terminal's history: this VM's, from the running server or the file.
   defp load_cmds(socket, vm) do
     entries = VmServer.commands(vm.id)
 
@@ -1933,7 +1933,7 @@ defmodule QemuAdminWeb.AdminLive do
           serial_tail={@serial_tail}
         />
     {/case}
-    <Commands
+    <Terminal
       vm={@vm}
       rt={@rt}
       entries={@streams.cmds}

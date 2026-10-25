@@ -1,6 +1,6 @@
-defmodule QemuAdminWeb.Components.Vm.Commands do
+defmodule QemuAdminWeb.Components.Vm.Terminal do
   @moduledoc """
-  The command panel at the bottom of a VM's page: the history of what was
+  The terminal at the bottom of a VM's page: the history of what was
   sent to QEMU (`QemuAdmin.VmServer.commands/1` — the command line the run
   started with, the QMP commands and their answers, the QMP events) and a
   prompt to send more: a monitor command (`info registers`) or a QMP message
@@ -67,7 +67,7 @@ defmodule QemuAdminWeb.Components.Vm.Commands do
 
   def render(assigns) do
     ~F"""
-    <section id="vm-commands" class="flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60">
+    <section id="vm-terminal" class="flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60">
       <div class="flex h-8 shrink-0 items-center gap-2 px-3 text-xs">
         <button
           type="button"
@@ -78,7 +78,7 @@ defmodule QemuAdminWeb.Components.Vm.Commands do
         >
           <.icon name={if @open, do: "hero-chevron-down", else: "hero-chevron-up"} class="size-3.5" />
           <.icon name="hero-command-line" class="size-4" />
-          <span class="qa-label mb-0">Comandos</span>
+          <span class="qa-label mb-0">Terminal</span>
         </button>
         <span class="min-w-0 flex-1 truncate text-[0.65rem] text-base-content/40">
           o que foi enviado ao QEMU (QMP) · envie o seu: comando do monitor ou JSON

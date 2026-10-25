@@ -2,9 +2,9 @@
 tags: [qemu-admin, operacao, qmp]
 atualizado: 2026-10-25
 ---
-# Painel de comandos
+# Terminal
 
-Painel recolhível no rodapé de **toda página de VM** (`Vm.Commands`), pensado para quem quer aprender a mexer no QEMU: mostra o que o app manda ao QEMU e deixa o usuário mandar os seus comandos.
+Terminal recolhível no rodapé de **toda página de VM** (`Vm.Terminal`), pensado para quem quer aprender a mexer no QEMU: mostra o que o app manda ao QEMU e deixa o usuário mandar os seus comandos.
 
 ## O que aparece
 Linhas com a hora local, um prefixo e o texto:
@@ -24,10 +24,10 @@ Não entram as consultas internas do app (a miniatura da tela a cada 5 s e a con
 - Texto que **não** começa com `{` é um comando do monitor (vai pelo QMP `human-monitor-command`): `info status`, `info registers`, `info qtree`, `info mtree`…
 - Texto que começa com `{` é uma mensagem QMP: `{"execute": "query-status"}`, com `"arguments"` opcional.
 - **↑ / ↓** percorrem o que foi enviado antes, para editar e mandar de novo (hook `CmdInput`).
-- Só com a VM ligada. Desligada, o painel mostra o histórico da última execução.
+- Só com a VM ligada. Desligada, o terminal mostra o histórico da última execução.
 
 ## Editar a linha de partida
-O botão **Editar linha de partida** (no cabeçalho do painel) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.
+O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.
 
 - No lugar das portas que o app escolhe a cada início, a linha tem **marcadores**: `{qmp}`, `{serial}`, `{ws}`, `{vnc}` (o número do display VNC) e `{gdb}`. O app os troca por portas livres a cada execução.
 - **Salvar** guarda a linha no `vm.json` (campo `command`). Se o texto for igual ao padrão, nada é guardado e a VM continua seguindo as suas configurações. Um selo "linha de partida editada" aparece enquanto houver uma linha própria.
@@ -43,6 +43,7 @@ O botão **Editar linha de partida** (no cabeçalho do painel) abre um editor co
 - Para aprender: a linha `$` mostra os argumentos reais; `Configuração → Argumentos extras do QEMU` aplica novos argumentos no próximo boot.
 
 ## Pendente
-- [x] Editar a linha de partida direto no painel.
-- [ ] Completar/ajudar comandos (lista de `query-*` e dos `info` mais úteis).
+- [x] Editar a linha de partida direto no terminal.
+- [ ] **Sugestões ao digitar**: nome, uso e descrição de cada comando, a partir do [[Catalogo de comandos]] (já gerado, falta ligar ao terminal).
+- [ ] **Comandos salvos**: um arquivo JSON onde o usuário guarda comandos com nome (ex.: `start`), cada um com uma sequência de comandos executada na VM selecionada.
 - [ ] Teste do app aberto em janela larga: o painel ocupa ~11 rem e aperta a página em janelas baixas (dá para recolher).
