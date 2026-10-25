@@ -10,7 +10,7 @@ Verificação feita em 2026-10-24 (índice: [[Home]]).
 | Item | Resultado |
 | --- | --- |
 | `mix compile --warnings-as-errors` | sem avisos |
-| `mix test` | **143 testes, 0 falhas** (~10 s) |
+| `mix test` | **152 testes, 0 falhas** (~10 s) |
 | Servidor de dev | responde **HTTP 200** em http://localhost:4010 |
 | VMs ligadas | nenhuma (nenhum `qemu-system-*` em execução; só os `erl.exe` do servidor) |
 | QEMU portátil | `qemu/` versão 11.1.0 (x86_64, i386, aarch64, arm, avr) |

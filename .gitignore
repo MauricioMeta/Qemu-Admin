@@ -49,3 +49,5 @@ npm-debug.log
 
 # The staged Elixir release the desktop bundle ships (`mix desktop.stage`).
 /src-tauri/resources/
+/renode/
+/renode.tmp/

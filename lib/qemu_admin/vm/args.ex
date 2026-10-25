@@ -129,6 +129,7 @@ defmodule QemuAdmin.Vm.Args do
       :esp32 -> build_esp32(vm, ports)
       :avr -> build_avr(vm, ports)
       :cortexm -> build_cortexm(vm, ports)
+      :renode -> QemuAdmin.Renode.args(vm, ports)
       :raspi -> build_raspi(vm, ports)
       :pc -> build_pc(vm, ports, host)
     end
@@ -171,11 +172,7 @@ defmodule QemuAdmin.Vm.Args do
   end
 
   @doc "An Arduino's program in its folder: `firmware.elf` or `firmware.bin`, or nil."
-  def avr_firmware(vm) do
-    ~w(firmware.elf firmware.bin)
-    |> Enum.map(&Path.join(Vm.dir(vm), &1))
-    |> Enum.find(&File.regular?/1)
-  end
+  def avr_firmware(vm), do: QemuAdmin.Firmwares.path(vm)
 
   @doc "A Cortex-M board's program in its folder: `firmware.elf` or `firmware.bin`, or nil."
   def cortexm_firmware(vm), do: avr_firmware(vm)

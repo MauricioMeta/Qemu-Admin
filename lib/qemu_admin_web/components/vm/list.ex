@@ -5,7 +5,14 @@ defmodule QemuAdminWeb.Components.Vm.List do
   row each — status dot, name, what it is — the selected one highlighted,
   as the Rockwell Viewer's project tree. A filter box narrows it.
 
-  Events: `select_vm` (`id`), `new_vm`, `filter_vms` (`q`),
+  The VMs are grouped by engine (QEMU, Renode). A board that runs a program (an
+  Arduino, a Cortex-M board, a Renode board) opens like a tree node onto its
+  **firmwares** (`QemuAdmin.Firmwares`): clicking one makes it the VM's program,
+  the play button next to it starts the VM with it, and "adicionar firmware…" copies
+  a file into the VM's `firmware/` folder.
+
+  Events: `tree_toggle` (`id`), `pick_firmware` and `run_firmware` (`id`, `file`),
+  `select_vm` (`id`), `new_vm`, `filter_vms` (`q`),
   `open_workspace` (`path`), `forget_workspace` (`path`), `picker_open`
   (target `workspace`).
   """
@@ -14,6 +21,7 @@ defmodule QemuAdminWeb.Components.Vm.List do
 
   import QemuAdminWeb.CoreComponents, only: [icon: 1]
 
+  alias QemuAdmin.Firmwares
   alias QemuAdminWeb.Components.Vm.StatusDot
 
   @doc "`[{vm, runtime}]`."
@@ -24,6 +32,9 @@ defmodule QemuAdminWeb.Components.Vm.List do
 
   @doc "The filter text."
   prop filter, :string, default: ""
+
+  @doc "Ids of the VMs whose firmwares are listed (the tree's open nodes)."
+  prop open, :list, default: []
 
   @doc "`QemuAdmin.Workspace.list/0`."
   prop workspaces, :list, default: []
@@ -36,6 +47,23 @@ defmodule QemuAdminWeb.Components.Vm.List do
       board -> board.name
     end
   end
+
+  # the engines, in tree order: QEMU's VMs, then Renode's
+  defp groups(vms) do
+    {renode, qemu} = Enum.split_with(vms, fn {vm, _} -> QemuAdmin.Vm.kind(vm) == :renode end)
+    [{"qemu", "QEMU", qemu}, {"renode", "Renode", renode}]
+  end
+
+  # each VM with its firmwares and whether its node is open
+  defp nodes(group, open) do
+    for {vm, rt} <- group do
+      {vm, rt, Firmwares.list(vm), vm.id in open and Firmwares.supported?(vm)}
+    end
+  end
+
+  defp size_label(bytes) when bytes >= 1_048_576, do: "#{Float.round(bytes / 1_048_576, 1)} MiB"
+  defp size_label(bytes) when bytes >= 1024, do: "#{Float.round(bytes / 1024, 1)} KiB"
+  defp size_label(bytes), do: "#{bytes} B"
 
   defp shown(vms, ""), do: vms
 
@@ -150,27 +178,97 @@ defmodule QemuAdminWeb.Components.Vm.List do
         </label>
       </form>
       <nav id="vm-list" class="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5" aria-label="VMs">
-        {#for {vm, rt} <- shown(@vms, @filter)}
-          <button
-            type="button"
-            id={"vm-row-#{vm.id}"}
-            phx-click="select_vm"
-            phx-value-id={vm.id}
-            aria-current={if vm.id == @selected, do: "page"}
-            class={
-              "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
-              "bg-primary/15 text-primary": vm.id == @selected,
-              "text-base-content/75 hover:bg-base-content/5 hover:text-base-content": vm.id != @selected
-            }
+        {#for {engine, label, group} <- groups(shown(@vms, @filter))}
+          <div
+            :if={group != []}
+            id={"engine-#{engine}"}
+            class="flex items-center gap-1.5 px-2 pt-2 pb-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-base-content/40"
           >
-            <StatusDot status={rt.status} />
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-xs font-semibold">{vm.name}</span>
-              <span class="block truncate text-[0.65rem] text-base-content/40">
-                {subtitle(vm)}
-              </span>
-            </span>
-          </button>
+            <.icon name={if engine == "renode", do: "hero-bolt", else: "hero-server-stack"} class="size-3" />
+            {label}
+            <span class="font-mono font-normal">{length(group)}</span>
+          </div>
+          {#for {vm, rt, fws, open?} <- nodes(group, @open)}
+              <div id={"vm-node-#{vm.id}"}>
+                <div class={
+                  "flex w-full items-center rounded-md transition-colors",
+                  "bg-primary/15 text-primary": vm.id == @selected,
+                  "text-base-content/75 hover:bg-base-content/5 hover:text-base-content": vm.id != @selected
+                }>
+                  <button
+                    :if={Firmwares.supported?(vm)}
+                    type="button"
+                    id={"vm-toggle-#{vm.id}"}
+                    phx-click="tree_toggle"
+                    phx-value-id={vm.id}
+                    title={if open?, do: "Recolher os firmwares", else: "Mostrar os firmwares (#{length(fws)})"}
+                    class="grid size-6 shrink-0 place-items-center rounded text-base-content/45 hover:text-primary"
+                  >
+                    <.icon name={if open?, do: "hero-chevron-down", else: "hero-chevron-right"} class="size-3" />
+                  </button>
+                  <span :if={not Firmwares.supported?(vm)} class="size-6 shrink-0" />
+                  <button
+                    type="button"
+                    id={"vm-row-#{vm.id}"}
+                    phx-click="select_vm"
+                    phx-value-id={vm.id}
+                    aria-current={if vm.id == @selected, do: "page"}
+                    class="flex min-w-0 flex-1 items-center gap-2.5 py-2 pr-2.5 text-left"
+                  >
+                    <StatusDot status={rt.status} />
+                    <span class="min-w-0 flex-1">
+                      <span class="block truncate text-xs font-semibold">{vm.name}</span>
+                      <span class="block truncate text-[0.65rem] text-base-content/40">
+                        {subtitle(vm)}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+                <ul :if={open?} id={"fw-list-#{vm.id}"} class="mb-1 ml-6 border-l border-base-content/10 pl-1">
+                  <li :for={fw <- fws} id={"fw-#{vm.id}-#{fw.name}"} class="group flex items-center">
+                    <button
+                      type="button"
+                      phx-click="pick_firmware"
+                      phx-value-id={vm.id}
+                      phx-value-file={fw.file}
+                      title={"Usar #{fw.file} nesta VM"}
+                      class={
+                        "flex min-w-0 flex-1 items-center gap-1.5 rounded px-2 py-1 text-left text-[0.7rem] hover:bg-base-content/5",
+                        "font-semibold text-primary": fw.active?,
+                        "text-base-content/65": not fw.active?
+                      }
+                    >
+                      <.icon name={if fw.active?, do: "hero-check-circle", else: "hero-document"} class="size-3 shrink-0" />
+                      <span class="min-w-0 flex-1 truncate">{fw.name}</span>
+                      <span class="shrink-0 font-mono text-[0.58rem] text-base-content/35">{size_label(fw.size)}</span>
+                    </button>
+                    <button
+                      type="button"
+                      phx-click="run_firmware"
+                      phx-value-id={vm.id}
+                      phx-value-file={fw.file}
+                      title={"Simular #{vm.name} com #{fw.name}"}
+                      class="grid size-5 shrink-0 place-items-center rounded text-success/70 hover:bg-success/15 hover:text-success"
+                    >
+                      <.icon name="hero-play" class="size-3" />
+                    </button>
+                  </li>
+                  <li :if={fws == []} class="px-2 py-1 text-[0.65rem] italic text-base-content/35">nenhum firmware</li>
+                  <li>
+                    <button
+                      type="button"
+                      id={"fw-add-#{vm.id}"}
+                      phx-click="picker_open"
+                      phx-value-target={"tree_fw:#{vm.id}"}
+                      phx-value-exts={Enum.join(Firmwares.extensions(vm), ",")}
+                      class="flex w-full items-center gap-1.5 rounded px-2 py-1 text-left text-[0.65rem] text-base-content/45 hover:text-primary"
+                    >
+                      <.icon name="hero-plus" class="size-3" /> adicionar firmware…
+                    </button>
+                  </li>
+                </ul>
+              </div>
+          {/for}
         {/for}
         <div :if={@vms == []} class="px-3 py-8 text-center text-xs text-base-content/40">
           Nenhuma VM neste workspace.

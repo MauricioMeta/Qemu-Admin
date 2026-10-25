@@ -128,6 +128,12 @@ defmodule QemuAdminWeb.AdminLive do
       @config,
       @log
     ],
+    renode: [
+      @overview,
+      {"console", "Serial", "hero-command-line"},
+      @config,
+      @log
+    ],
     raspi: [
       @overview,
       {"console", "Tela", "hero-tv"},
@@ -201,6 +207,7 @@ defmodule QemuAdminWeb.AdminLive do
        cmd_history: [],
        cmd_groups: %{},
        lp: nil,
+       tree_open: [],
        saved: [],
        cp: %{editing: nil, error: nil},
        cp_commands: [],
@@ -270,6 +277,27 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("filter_vms", %{"q" => q}, socket), do: {:noreply, assign(socket, filter: q)}
 
   def handle_event("select_vm", %{"id" => id}, socket), do: {:noreply, open_vm(socket, id)}
+
+  # ---- the side panel's tree: a VM's firmwares
+
+  def handle_event("tree_toggle", %{"id" => id}, socket) do
+    open = socket.assigns.tree_open
+    {:noreply, assign(socket, tree_open: if(id in open, do: List.delete(open, id), else: [id | open]))}
+  end
+
+  # A firmware picked: it becomes the VM's program and the VM opens.
+  def handle_event("pick_firmware", %{"id" => id, "file" => file}, socket) do
+    {_, socket} = use_firmware(socket, id, file)
+    {:noreply, socket}
+  end
+
+  # The play button: the same, then the VM starts with it.
+  def handle_event("run_firmware", %{"id" => id, "file" => file}, socket) do
+    case use_firmware(socket, id, file) do
+      {:ok, socket} -> handle_event("start_vm", %{"id" => id}, socket)
+      {:error, socket} -> {:noreply, socket}
+    end
+  end
   def handle_event("activate_tab", %{"id" => id}, socket), do: {:noreply, open_vm(socket, id)}
 
   def handle_event("close_tab", %{"id" => id}, socket) do
@@ -316,6 +344,7 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("vm_preset", %{"machine" => machine}, socket) do
     {arch, machine} =
       case QemuAdmin.Board.for_machine(machine) do
+        nil when machine == "renode" -> {"renode", Vm.default_machine("renode")}
         nil -> {"x86_64", "q35"}
         board -> {board.arch, board.machine}
       end
@@ -1381,6 +1410,20 @@ defmodule QemuAdminWeb.AdminLive do
     end
   end
 
+  # Makes `file` the program of VM `id` (stopped) and opens it: `{:ok | :error, socket}`.
+  defp use_firmware(socket, id, file) do
+    with {vm, rt} <- find_vm(socket.assigns.vms, id),
+         true <- stopped?(rt) || {:error, "Desligue a VM antes de trocar o firmware"},
+         true <- Enum.any?(QemuAdmin.Firmwares.list(vm), &(&1.file == file)) || {:error, "firmware não encontrado: #{file}"},
+         {:ok, vm} <- VmStore.save(%{vm | program: file}) do
+      socket = socket |> load_vms() |> open_vm(vm.id)
+      {:ok, put_flash(socket, :info, "#{vm.name}: firmware #{file}")}
+    else
+      {:error, msg} -> {:error, put_flash(socket, :error, msg)}
+      _ -> {:error, put_flash(socket, :error, "VM não encontrada")}
+    end
+  end
+
   defp saved_entries(socket), do: Catalog.saved_entries(socket.assigns.cp_commands)
 
   defp vm_name(socket_assigns) do
@@ -1751,6 +1794,9 @@ defmodule QemuAdminWeb.AdminLive do
         merged
       end
 
+    # another board has other UARTs
+    merged = if merged["machine"] != old["machine"], do: Map.put(merged, "uart", ""), else: merged
+
     old_kind = Vm.kind(old["arch"] || "", old["machine"] || "")
     new_kind = Vm.kind(merged["arch"] || "", merged["machine"] || "")
 
@@ -1888,6 +1934,18 @@ defmodule QemuAdminWeb.AdminLive do
       "workspace" ->
         open_workspace(socket, path)
 
+      "tree_fw:" <> id ->
+        with {vm, rt} <- find_vm(socket.assigns.vms, id),
+             true <- stopped?(rt) || {:error, "Desligue a VM antes de trocar o firmware"},
+             {:ok, file} <- QemuAdmin.Firmwares.add(vm, path) do
+          socket = assign(socket, tree_open: Enum.uniq([id | socket.assigns.tree_open]))
+          {_, socket} = use_firmware(socket, id, file)
+          socket
+        else
+          {:error, msg} -> put_flash(socket, :error, msg)
+          _ -> socket
+        end
+
       "new_sd_image" ->
         assign(socket, params: Map.put(socket.assigns.params, "sd_image", path))
 
@@ -2015,7 +2073,7 @@ defmodule QemuAdminWeb.AdminLive do
           {#if @view == "settings"}
             <SettingsNav section={@settings_section} />
           {#else}
-            <VmList vms={@vms} selected={@selected} filter={@filter} workspaces={@workspaces} />
+            <VmList vms={@vms} selected={@selected} filter={@filter} workspaces={@workspaces} open={@tree_open} />
           {/if}
         </aside>
 

@@ -206,4 +206,30 @@ hmp: info status"}) |> render_submit()
     view |> element("#cat-step") |> render_click()
     assert [%{"steps" => ["qmp: stop", "qmp: cont"]}] = QemuAdmin.Terminal.Saved.list("x")
   end
+
+  test "the side panel groups the VMs by engine and opens a board onto its firmwares", %{conn: conn} do
+    {:ok, vm} = VmStore.create(%{"name" => "Placa", "arch" => "arm", "machine" => "netduinoplus2"})
+    {:ok, pc} = VmStore.create(%{"name" => "Servidor"})
+    dir = QemuAdmin.Vm.dir(vm)
+    File.mkdir_p!(Path.join(dir, "firmware"))
+    File.write!(Path.join(dir, "firmware/a.elf"), "x")
+    File.write!(Path.join(dir, "firmware/b.elf"), "x")
+
+    {:ok, view, _html} = live(conn, "/")
+    assert has_element?(view, "#engine-qemu")
+    refute has_element?(view, "#engine-renode")
+
+    # a PC has no firmwares to open; a board does
+    refute has_element?(view, "#vm-toggle-#{pc.id}")
+    refute has_element?(view, "#fw-list-#{vm.id}")
+    view |> element("#vm-toggle-#{vm.id}") |> render_click()
+    assert has_element?(view, "[id='fw-#{vm.id}-a.elf']")
+    assert has_element?(view, "[id='fw-#{vm.id}-b.elf']")
+
+    # picking one makes it the program and opens the VM
+    view |> element("[id='fw-#{vm.id}-b.elf'] button[phx-click=pick_firmware]") |> render_click()
+    assert {:ok, %{program: "firmware/b.elf"}} = VmStore.get(vm.id)
+    assert has_element?(view, "[id='fw-#{vm.id}-b.elf'] .hero-check-circle")
+    refute has_element?(view, "[id='fw-#{vm.id}-a.elf'] .hero-check-circle")
+  end
 end

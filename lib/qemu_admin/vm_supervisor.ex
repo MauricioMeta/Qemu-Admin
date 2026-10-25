@@ -11,7 +11,7 @@ defmodule QemuAdmin.VmSupervisor do
 
   use DynamicSupervisor
 
-  alias QemuAdmin.{Qemu, Vm, VmServer}
+  alias QemuAdmin.{Qemu, Renode, RenodeServer, Vm, VmServer}
   alias QemuAdmin.Vm.Args
 
   @table :qemu_admin_runtime
@@ -29,6 +29,38 @@ defmodule QemuAdmin.VmSupervisor do
   disk is an `{:error, message}` for the page and not a crashed process.
   """
   def start_vm(%Vm{} = vm) do
+    if Vm.kind(vm) == :renode, do: start_renode(vm), else: start_qemu(vm)
+  end
+
+  # A board of Renode: its executable, its board description and a program to run.
+  defp start_renode(vm) do
+    with :ok <- not_running(vm.id),
+         {:ok, exe} <- renode_exe(),
+         :ok <- renode_ready(vm) do
+      case DynamicSupervisor.start_child(__MODULE__, {RenodeServer, {vm, exe}}) do
+        {:ok, pid} -> {:ok, pid}
+        {:error, {:already_started, _}} -> {:error, "a VM já está em execução"}
+        {:error, reason} -> {:error, "não foi possível iniciar: #{inspect(reason)}"}
+      end
+    end
+  end
+
+  defp renode_exe do
+    case Renode.exe() do
+      {:ok, exe} -> {:ok, exe}
+      {:error, :no_renode} -> {:error, "Renode não encontrado — coloque-o na pasta renode/ ao lado do app"}
+    end
+  end
+
+  defp renode_ready(vm) do
+    cond do
+      is_nil(Renode.platform_file(vm.machine)) -> {:error, "a placa #{vm.machine} não existe nesta instalação do Renode"}
+      is_nil(QemuAdmin.Firmwares.path(vm)) -> {:error, "escolha um firmware para esta VM (árvore da lateral)"}
+      true -> :ok
+    end
+  end
+
+  defp start_qemu(%Vm{} = vm) do
     with :ok <- not_running(vm.id),
          {:ok, exe} <- emulator(vm),
          :ok <- prepare(vm) do

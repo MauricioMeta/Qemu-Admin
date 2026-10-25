@@ -33,6 +33,11 @@ defmodule QemuAdmin.Vm do
   (`QemuAdmin.Vm.Args.build_run/3`): the arguments as one string, where
   `{qmp}`, `{serial}`, `{ws}`, `{vnc}` and `{gdb}` stand for the ports the app
   picks at each start. It is edited in the page's command panel.
+  A VM whose `arch` is `"renode"` is a board of the **Renode** emulator
+  (`QemuAdmin.Renode`, `kind/1` `:renode`): `machine` is the board's description,
+  `uart` the UART it prints on (the first one by default), `program` the firmware
+  it runs (`QemuAdmin.Firmwares`; also what picks the program of an Arduino or a
+  Cortex-M board among the files of its folder).
   `firmware` and `app` remember what was last written (AtomVM's version,
   the `.avm`, the Arduino's program), for the page. What a PC has and a
   board has not — CD, UEFI, video card, a choice of accelerator — is fixed
@@ -69,6 +74,8 @@ defmodule QemuAdmin.Vm do
             dtb: "",
             append: "",
             command: "",
+            uart: "",
+            program: "",
             created_at: nil
 
   @type t :: %__MODULE__{}
@@ -82,7 +89,13 @@ defmodule QemuAdmin.Vm do
     "avr" => ~w(arduino-uno arduino-mega-2560-v3 arduino-mega)
   }
 
+  def machines("renode"), do: QemuAdmin.Renode.platforms()
   def machines(arch), do: Map.get(@machines, arch, [])
+  def default_machine("renode") do
+    list = machines("renode")
+    if "stm32f4_discovery" in list, do: "stm32f4_discovery", else: List.first(list)
+  end
+
   def default_machine(arch), do: arch |> machines() |> List.first()
 
   # the Cortex-M machines of `qemu-system-arm` the app configures
@@ -91,9 +104,10 @@ defmodule QemuAdmin.Vm do
   @doc "The Cortex-M (STM32) machines the app configures."
   def cortexm_machines, do: @cortexm
 
-  @doc "`:pc`, `:esp32`, `:avr` (an Arduino), `:cortexm` or `:raspi`."
+  @doc "`:pc`, `:esp32`, `:avr` (an Arduino), `:cortexm`, `:raspi` or `:renode` (a board of Renode)."
   def kind(%__MODULE__{arch: arch, machine: machine}), do: kind(arch, machine)
 
+  def kind("renode", _machine), do: :renode
   def kind("xtensa", _machine), do: :esp32
   def kind("avr", _machine), do: :avr
   def kind("arm", machine) when machine in @cortexm, do: :cortexm
@@ -101,8 +115,8 @@ defmodule QemuAdmin.Vm do
   def kind(_arch, _machine), do: :pc
 
   @doc "Whether the VM (or architecture) is a microcontroller — an ESP32, an Arduino or a Cortex-M board."
-  def mcu?(%__MODULE__{} = vm), do: kind(vm) in [:esp32, :avr, :cortexm]
-  def mcu?(arch), do: arch in ["xtensa", "avr"]
+  def mcu?(%__MODULE__{} = vm), do: kind(vm) in [:esp32, :avr, :cortexm, :renode]
+  def mcu?(arch), do: arch in ["xtensa", "avr", "renode"]
 
   @doc "Whether the VM has a UART the page shows (every board)."
   def serial?(%__MODULE__{} = vm), do: kind(vm) != :pc
@@ -114,6 +128,7 @@ defmodule QemuAdmin.Vm do
   def kind_defaults(:esp32, _machine), do: %{memory: 4, cpus: 2, net_model: "open_eth"}
   def kind_defaults(:avr, _machine), do: %{memory: 0, cpus: 1, net_model: "none"}
   def kind_defaults(:cortexm, _machine), do: %{memory: 0, cpus: 1, net_model: "none"}
+  def kind_defaults(:renode, _machine), do: %{memory: 0, cpus: 1, net_model: "none"}
 
   def kind_defaults(:raspi, machine) do
     %{memory: QemuAdmin.Board.for_machine(machine).memory, cpus: 4, net_model: "usb-net"}
@@ -222,6 +237,8 @@ defmodule QemuAdmin.Vm do
         kernel: str(params, "kernel", vm.kernel),
         dtb: str(params, "dtb", vm.dtb),
         append: str(params, "append", vm.append),
+        uart: str(params, "uart", vm.uart),
+        program: str(params, "program", vm.program),
         notes: Map.get(params, "notes", vm.notes) || ""
     }
 
@@ -236,6 +253,7 @@ defmodule QemuAdmin.Vm do
         :esp32 -> as_esp32(vm, Map.has_key?(params, "memory"))
         :avr -> as_avr(vm)
         :cortexm -> as_cortexm(vm)
+        :renode -> as_avr(vm)
         :raspi -> as_raspi(vm)
         :pc -> vm
       end
@@ -309,7 +327,7 @@ defmodule QemuAdmin.Vm do
   def validate(vm) do
     []
     |> check(String.trim(vm.name) == "", :name, "dê um nome à VM")
-    |> check(vm.arch not in QemuAdmin.Qemu.arches(), :arch, "arquitetura desconhecida")
+    |> check(vm.arch not in ["renode" | QemuAdmin.Qemu.arches()], :arch, "arquitetura desconhecida")
     |> check(not is_integer(vm.cpus) or vm.cpus < 1 or vm.cpus > 256, :cpus, "de 1 a 256")
     |> check(
       kind(vm) == :pc and (not is_integer(vm.memory) or vm.memory < 16),

@@ -52,15 +52,18 @@ defmodule QemuAdminWeb.Components.Vm.Form do
     {"netduinoplus2", "Netduino Plus 2 (STM32)", "hero-cpu-chip"},
     {"raspi3b", "Raspberry Pi 3", "hero-server"},
     {"raspi4b", "Raspberry Pi 4", "hero-server"},
-    {"raspi0", "Raspberry Pi Zero", "hero-server"}
+    {"raspi0", "Raspberry Pi Zero", "hero-server"},
+    {"renode", "Renode (outras placas)", "hero-bolt"}
   ]
 
   defp presets, do: @presets
 
   defp preset_active?(params, nil), do: pc?(params)
+  defp preset_active?(params, "renode"), do: kind(params) == :renode
   defp preset_active?(params, machine), do: v(params, "machine") == machine
 
   defp preset_available?(_emulators, nil), do: true
+  defp preset_available?(_emulators, "renode"), do: QemuAdmin.Renode.available?()
   defp preset_available?([], _machine), do: true
 
   defp preset_available?(emulators, machine),
@@ -160,6 +163,9 @@ defmodule QemuAdminWeb.Components.Vm.Form do
                     {a}{if @emulators != [] and a not in @emulators, do: " (indisponível)"}
                   </option>
                 {/for}
+                <option value="renode" selected={v(@params, "arch") == "renode"} disabled={not QemuAdmin.Renode.available?()}>
+                  renode{if not QemuAdmin.Renode.available?(), do: " (indisponível)"}
+                </option>
               </select>
             </div>
             <div>
@@ -168,6 +174,13 @@ defmodule QemuAdminWeb.Components.Vm.Form do
                 {#for m <- Vm.machines(v(@params, "arch"))}
                   <option value={m} selected={v(@params, "machine") == m}>{Vm.machine_label(m)}</option>
                 {/for}
+              </select>
+            </div>
+            <div :if={kind(@params) == :renode}>
+              <label class="qa-label" for="vm_uart">UART do console</label>
+              <select id="vm_uart" name="vm[uart]" class="qa-field">
+                <option value="" selected={v(@params, "uart") in ["", nil]}>automática (a primeira da placa)</option>
+                <option :for={u <- QemuAdmin.Renode.uarts(v(@params, "machine"))} value={u} selected={v(@params, "uart") == u}>{u}</option>
               </select>
             </div>
             {#if kind(@params) == :esp32}
@@ -258,6 +271,9 @@ defmodule QemuAdminWeb.Components.Vm.Form do
           </p>
           <p :if={kind(@params) == :cortexm} class="text-[0.68rem] text-base-content/50">
             Emulado pelo qemu-system-arm (sempre TCG). O firmware (.elf, .bin ou .hex) vai para a flash na aba Firmware, depois de criar.
+          </p>
+          <p :if={kind(@params) == :renode} class="text-[0.68rem] text-base-content/50">
+            Emulado pelo Renode. O firmware (.elf ou .hex) vai para a pasta firmware/ da VM e se escolhe na árvore da lateral.
           </p>
           <p :if={kind(@params) == :raspi} class="text-[0.68rem] text-base-content/50">
             Emulado pelo QEMU (sempre TCG): o kernel e o device tree saem da imagem do cartão SD.
@@ -494,7 +510,7 @@ defmodule QemuAdminWeb.Components.Vm.Form do
         </section>
 
         <!-- Rede -->
-        <section :if={kind(@params) not in [:avr, :cortexm]} class="qa-card space-y-3 p-4">
+        <section :if={kind(@params) not in [:avr, :cortexm, :renode]} class="qa-card space-y-3 p-4">
           <h3 class="qa-label text-primary">Rede</h3>
           <div class="grid grid-cols-2 gap-3">
             <div>
