@@ -1185,7 +1185,7 @@ defmodule QemuAdminWeb.AdminLive do
         {:vm_serial, id, offset, data},
         %{assigns: %{selected: id, vm_view: view}} = socket
       )
-      when view in ["console", "serial"],
+      when view in ["overview", "console", "serial"],
       do:
         {:noreply,
          push_event(socket, "qa:serial", %{id: id, offset: offset, data: Base.encode64(data)})}
