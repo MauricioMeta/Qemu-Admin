@@ -46,6 +46,7 @@ defmodule QemuAdmin.Qemu do
   @doc "Forgets the cached `info/0` (after an install or a settings change)."
   def refresh do
     :persistent_term.erase(@key)
+    Enum.each(arches(), &:persistent_term.erase({__MODULE__, :machines, &1}))
     QemuAdmin.Qemu.Esp.refresh()
     info()
   end
@@ -118,6 +119,60 @@ defmodule QemuAdmin.Qemu do
   def source_label(:path), do: "PATH do sistema"
   def source_label(:system), do: "Instalação do sistema"
   def source_label(_), do: "—"
+
+  @doc """
+  Every machine `qemu-system-<arch>` emulates (`-M help`): `%{name:,
+  description:, default?:, alias_of:}`, sorted by name; `[]` when the
+  emulator is missing. Cached until `refresh/0`. Only some are ones the app
+  knows how to configure (`QemuAdmin.Vm.machines/1`).
+  """
+  def machines(arch) do
+    key = {__MODULE__, :machines, arch}
+
+    case :persistent_term.get(key, nil) do
+      nil ->
+        list = read_machines(arch)
+        :persistent_term.put(key, list)
+        list
+
+      list ->
+        list
+    end
+  end
+
+  defp read_machines(arch) do
+    with {:ok, exe} <- system_exe(arch),
+         {out, 0} <- run(exe, ["-machine", "help"]) do
+      out
+      |> String.split(~r/\R/, trim: true)
+      |> Enum.flat_map(&parse_machine/1)
+      |> Enum.sort_by(& &1.name)
+    else
+      _ -> []
+    end
+  end
+
+  # "q35   Standard PC (Q35 + ICH9, 2009) (alias of pc-q35-11.1)"
+  defp parse_machine(line) do
+    case Regex.run(~r/^(\S+)\s+(.+)$/, String.trim_trailing(line)) do
+      [_, name, rest] when name != "Supported" ->
+        alias_of =
+          case Regex.run(~r/\(alias of ([^)]+)\)\s*$/, rest) do
+            [_, target] -> target
+            _ -> nil
+          end
+
+        description =
+          rest
+          |> String.replace(~r/\s*\((alias of [^)]+|default)\)\s*$/, "")
+          |> String.trim()
+
+        [%{name: name, description: description, default?: String.ends_with?(rest, "(default)"), alias_of: alias_of}]
+
+      _ ->
+        []
+    end
+  end
 
   defp probe do
     esp = if QemuAdmin.Qemu.Esp.available?(), do: ["xtensa"], else: []

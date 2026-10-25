@@ -11,6 +11,9 @@ atualizado: 2026-10-25
 1. A lista de máquinas é fixa em `QemuAdmin.Vm` (`@machines`, ~linha 68). Para `arm` só existem `raspi2b` e `raspi0`.
 2. Falta um caminho em `Vm.Args` para Cortex-M: sem disco/CD/rede/tela; carrega `.elf`/`.bin` com `-kernel`, serial e `-nographic`.
 
+## Feito
+- A página **QEMU** lista todas as máquinas de cada emulador (`Qemu.machines/1`, lê `-machine help`), marcando as que o app configura. Só leitura: elas ainda não aparecem em "Nova VM".
+
 ## Plano (quando for implementado)
 - [ ] Máquinas Cortex-M na lista de `arm` (ou ler `-M help` do QEMU).
 - [ ] Novo tipo de placa em `QemuAdmin.Board` com abas Serial + Firmware (modelo: [[Arduino]]).

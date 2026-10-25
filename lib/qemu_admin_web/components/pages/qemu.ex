@@ -14,7 +14,7 @@ defmodule QemuAdminWeb.Components.Pages.Qemu do
 
   import QemuAdminWeb.CoreComponents, only: [icon: 1]
 
-  alias QemuAdmin.Qemu
+  alias QemuAdmin.{Qemu, Vm}
   alias QemuAdmin.Qemu.{Esp, Img}
 
   @doc "`QemuAdmin.Qemu.info/0`."
@@ -25,6 +25,9 @@ defmodule QemuAdminWeb.Components.Pages.Qemu do
 
   @doc "`QemuAdmin.Qemu.InstallJob.state/1` of Espressif's."
   prop install_esp, :map, required: true
+
+  defp supported?(arch, name), do: name in Vm.machines(arch)
+  defp app_count(arch), do: Enum.count(Qemu.machines(arch), &supported?(arch, &1.name))
 
   defp busy?(%{phase: p}), do: p in [:resolve, :download, :verify, :extract]
 
@@ -188,6 +191,41 @@ defmodule QemuAdminWeb.Components.Pages.Qemu do
             {if Esp.available?(), do: "Atualizar", else: "Baixar"}
           </button>
         </div>
+      </section>
+
+      <section id="qemu-machines" class="qa-card mb-4 p-5">
+        <h3 class="qa-label">Máquinas que o QEMU emula</h3>
+        <p class="mb-3 text-xs text-base-content/55">
+          O que cada emulador instalado lista em <code>-machine help</code>. As marcadas <span class="text-success">no app</span>
+          o app sabe configurar; as outras o QEMU tem, mas ainda não têm tela de configuração.
+        </p>
+        {#for arch <- @qemu.emulators}
+            <details id={"machines-#{arch}"} class="mb-1 rounded border border-primary/15">
+              <summary class="cursor-pointer select-none px-3 py-1.5 text-xs">
+                <span class="font-mono font-semibold">qemu-system-{arch}</span>
+                <span class="text-base-content/50">
+                  · {length(Qemu.machines(arch))} máquinas · {app_count(arch)} no app
+                </span>
+              </summary>
+              <table class="data-table">
+                <thead><tr><th>Máquina</th><th class="fill">Descrição</th><th>App</th></tr></thead>
+                <tbody>
+                  <tr :for={m <- Qemu.machines(arch)}>
+                    <td class="font-mono">{m.name}</td>
+                    <td class="fill">
+                      <span class="clip">
+                        {m.description}{if m.alias_of, do: " → #{m.alias_of}"}{if m.default?, do: " (padrão)"}
+                      </span>
+                    </td>
+                    <td>
+                      <span :if={supported?(arch, m.name)} class="text-success">no app</span>
+                      <span :if={not supported?(arch, m.name)} class="text-base-content/30">—</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </details>
+        {/for}
       </section>
 
       <section class="qa-card p-5">
