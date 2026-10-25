@@ -33,8 +33,14 @@ defmodule QemuAdminWeb.Components.Vm.List do
   @doc "The filter text."
   prop filter, :string, default: ""
 
-  @doc "Ids of the VMs whose firmwares are listed (the tree's open nodes)."
+  @doc "Ids of the VMs that are open in the tree."
   prop open, :list, default: []
+
+  @doc "`%{vm id => [{key, label, icon}]}`: the views each VM has."
+  prop views, :map, default: %{}
+
+  @doc "The selected VM's current view (`key`)."
+  prop view, :any, default: nil
 
   @doc "`QemuAdmin.Workspace.list/0`."
   prop workspaces, :list, default: []
@@ -57,7 +63,7 @@ defmodule QemuAdminWeb.Components.Vm.List do
   # each VM with its firmwares and whether its node is open
   defp nodes(group, open) do
     for {vm, rt} <- group do
-      {vm, rt, Firmwares.list(vm), vm.id in open and Firmwares.supported?(vm)}
+      {vm, rt, Firmwares.list(vm), vm.id in open}
     end
   end
 
@@ -196,17 +202,15 @@ defmodule QemuAdminWeb.Components.Vm.List do
                   "text-base-content/75 hover:bg-base-content/5 hover:text-base-content": vm.id != @selected
                 }>
                   <button
-                    :if={Firmwares.supported?(vm)}
                     type="button"
                     id={"vm-toggle-#{vm.id}"}
                     phx-click="tree_toggle"
                     phx-value-id={vm.id}
-                    title={if open?, do: "Recolher os firmwares", else: "Mostrar os firmwares (#{length(fws)})"}
+                    title={if open?, do: "Recolher", else: "Expandir (vistas e firmwares)"}
                     class="grid size-6 shrink-0 place-items-center rounded text-base-content/45 hover:text-primary"
                   >
                     <.icon name={if open?, do: "hero-chevron-down", else: "hero-chevron-right"} class="size-3" />
                   </button>
-                  <span :if={not Firmwares.supported?(vm)} class="size-6 shrink-0" />
                   <button
                     type="button"
                     id={"vm-row-#{vm.id}"}
@@ -224,7 +228,28 @@ defmodule QemuAdminWeb.Components.Vm.List do
                     </span>
                   </button>
                 </div>
-                <ul :if={open?} id={"fw-list-#{vm.id}"} class="mb-1 ml-6 border-l border-base-content/10 pl-1">
+                <ul :if={open?} id={"views-#{vm.id}"} class="mb-0.5 ml-6 border-l border-base-content/10 pl-1">
+                  <li :for={{key, label, icon} <- Map.get(@views, vm.id, [])}>
+                    <button
+                      type="button"
+                      id={"tree-view-#{vm.id}-#{key}"}
+                      phx-click="tree_view"
+                      phx-value-id={vm.id}
+                      phx-value-view={key}
+                      aria-current={if vm.id == @selected and @view == key, do: "page"}
+                      class={
+                        "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-[0.72rem] hover:bg-base-content/5",
+                        "bg-primary/15 font-semibold text-primary": vm.id == @selected and @view == key,
+                        "text-base-content/65": not (vm.id == @selected and @view == key)
+                      }
+                    >
+                      <.icon name={icon} class="size-3.5 shrink-0" />
+                      <span class="truncate">{label}</span>
+                    </button>
+                  </li>
+                </ul>
+                <ul :if={open? and Firmwares.supported?(vm)} id={"fw-list-#{vm.id}"} class="mb-1 ml-6 border-l border-base-content/10 pl-1">
+                  <li class="px-2 pt-1 text-[0.58rem] font-semibold uppercase tracking-wider text-base-content/35">Firmwares</li>
                   <li :for={fw <- fws} id={"fw-#{vm.id}-#{fw.name}"} class="group flex items-center">
                     <button
                       type="button"

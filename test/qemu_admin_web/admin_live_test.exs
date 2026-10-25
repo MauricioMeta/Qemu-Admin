@@ -145,10 +145,10 @@ hmp: info status"}) |> render_submit()
     {:ok, view, _html} = live(conn, "/")
 
     view |> element("#vm-row-box") |> render_click()
-    view |> element("#vm-view-config") |> render_click()
+    view |> element("#tree-view-box-config") |> render_click()
     assert has_element?(view, "#vm-form input[name='vm[name]'][value='Box']")
 
-    view |> element("#vm-view-log") |> render_click()
+    view |> element("#tree-view-box-log") |> render_click()
     assert has_element?(view, "#vm-log")
 
     view |> element("#nav-settings") |> render_click()
@@ -219,8 +219,10 @@ hmp: info status"}) |> render_submit()
     assert has_element?(view, "#engine-qemu")
     refute has_element?(view, "#engine-renode")
 
-    # a PC has no firmwares to open; a board does
-    refute has_element?(view, "#vm-toggle-#{pc.id}")
+    # a PC opens onto its views only; a board onto its firmwares too
+    view |> element("#vm-toggle-#{pc.id}") |> render_click()
+    assert has_element?(view, "#tree-view-#{pc.id}-overview")
+    refute has_element?(view, "#fw-list-#{pc.id}")
     refute has_element?(view, "#fw-list-#{vm.id}")
     view |> element("#vm-toggle-#{vm.id}") |> render_click()
     assert has_element?(view, "[id='fw-#{vm.id}-a.elf']")

@@ -85,7 +85,6 @@ defmodule QemuAdminWeb.AdminLive do
     Overview,
     SdCard,
     SerialConsole,
-    StatusDot,
     Terminal
   }
 
@@ -277,6 +276,10 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("filter_vms", %{"q" => q}, socket), do: {:noreply, assign(socket, filter: q)}
 
   def handle_event("select_vm", %{"id" => id}, socket), do: {:noreply, open_vm(socket, id)}
+
+  # a view of a VM, from the tree
+  def handle_event("tree_view", %{"id" => id, "view" => view}, socket),
+    do: {:noreply, open_vm(socket, id, view)}
 
   # ---- the side panel's tree: a VM's firmwares
 
@@ -1255,7 +1258,14 @@ defmodule QemuAdminWeb.AdminLive do
       view = if Enum.any?(vm_views(vm), &(elem(&1, 0) == view)), do: view, else: "overview"
 
       socket
-      |> assign(view: "vms", mode: nil, selected: id, tabs: tabs, vm_view: view)
+      |> assign(
+        view: "vms",
+        mode: nil,
+        selected: id,
+        tabs: tabs,
+        vm_view: view,
+        tree_open: Enum.uniq([id | socket.assigns.tree_open])
+      )
       |> remember_tab_view()
       |> prepare_view()
     else
@@ -2096,7 +2106,15 @@ defmodule QemuAdminWeb.AdminLive do
           {#if @view == "settings"}
             <SettingsNav section={@settings_section} />
           {#else}
-            <VmList vms={@vms} selected={@selected} filter={@filter} workspaces={@workspaces} open={@tree_open} />
+            <VmList
+              vms={@vms}
+              selected={if @view == "vms" and is_nil(@mode), do: @selected, else: nil}
+              filter={@filter}
+              workspaces={@workspaces}
+              open={@tree_open}
+              views={Map.new(@vms, fn {vm, _} -> {vm.id, vm_views(vm)} end)}
+              view={@vm_view}
+            />
           {/if}
         </aside>
 
@@ -2216,33 +2234,6 @@ defmodule QemuAdminWeb.AdminLive do
 
     ~F"""
     <PageHeader>
-      <:nav>
-        <StatusDot status={@rt.status} label />
-        <span class="truncate font-semibold">{@vm.name}</span>
-      </:nav>
-      <:center>
-        <div class="flex items-center rounded border border-primary/20 p-0.5" role="tablist">
-          {#for {key, label, icon} <- vm_views(@vm)}
-            <button
-              type="button"
-              id={"vm-view-#{key}"}
-              phx-click="vm_view"
-              phx-value-view={key}
-              role="tab"
-              title={label}
-              aria-selected={to_string(@vm_view == key)}
-              class={
-                "flex items-center gap-1.5 rounded-sm px-2.5 py-1 text-[0.7rem] transition-colors",
-                "bg-primary/15 text-primary font-semibold": @vm_view == key,
-                "text-base-content/55 hover:text-base-content": @vm_view != key
-              }
-            >
-              <.icon name={icon} class="size-3.5" />
-              <span class="hidden xl:inline">{label}</span>
-            </button>
-          {/for}
-        </div>
-      </:center>
       <:buttons>
         {#if (@vm_view == "console" and Vm.mcu?(@vm)) or @vm_view == "serial"}
           <IconButton

@@ -16,6 +16,8 @@ A lista de VMs é uma **árvore**: o motor (QEMU, Renode) → a VM → os seus *
 - **adicionar firmware…** copia um arquivo para `firmware/` da VM (pelo seletor de arquivos).
 - No QEMU, o programa de um Arduino ou de uma placa Cortex-M é o mesmo `program` (`Vm.Args.avr_firmware/1` → `Firmwares.path/1`).
 
+**As vistas da VM também estão na árvore:** ao abrir uma VM (seta ou clique) o nó mostra, em ordem, as suas vistas (Visão geral, Serial, Placa, Flash, Configuração, Log; as que a VM tem) e os Firmwares. A barra de vistas e o texto de estado (ligada/desligada) saíram da barra de cima: o estado é a bolinha da árvore e as vistas são os itens do nó. Escolher uma vista abre a VM nela.
+
 ## A aba Serial: enviar e ver a placa ao lado
 Vale para toda placa com UART.
 - **Barra de envio** (`#serial-send-<id>`, hook `SerialSend`) sob o terminal: uma linha de texto, **o que a termina** (+ CR, + LF, + CR LF ou sem fim; o padrão é CR, o que o Enter do terminal já manda) e **Enviar** ou Enter. ↑ / ↓ repetem o que foi enviado (guardado por VM no navegador). Sai como `serial_input`, o mesmo caminho das teclas digitadas no terminal. O app não ecoa o que enviou: quem responde é o firmware, na UART.
