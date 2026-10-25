@@ -4,7 +4,7 @@ atualizado: 2026-10-25
 ---
 # Catálogo de comandos do QEMU
 
-`priv/terminal/commands.json` lista todos os comandos do QEMU, para o [[Terminal]] sugerir enquanto se digita (ainda não ligado ao terminal). Gerado por `tools/gen_qemu_catalog.py` (Python 3, sem dependências):
+`priv/terminal/commands.json` lista todos os comandos do QEMU, para o [[Terminal]] sugerir enquanto se digita (servido em `/terminal/commands.json`). Gerado por `tools/gen_qemu_catalog.py` (Python 3, sem dependências):
 
 ```bash
 python tools/gen_qemu_catalog.py
@@ -28,5 +28,5 @@ Cada item traz `emulators`: em quais dos emuladores o comando existe (`x86_64`, 
 Depois de trocar de versão do QEMU, rode o script de novo: ele lê a versão do QEMU instalado e baixa os fontes dessa tag. O teste `test/qemu_admin/terminal_catalog_test.exs` confere a forma do arquivo.
 
 ## Pendente
-- [ ] Sugestões ao digitar no terminal (nome, uso e descrição de cada comando).
+- [x] Sugestões ao digitar no terminal (nome, uso e descrição de cada comando).
 - [ ] Comandos salvos (ex.: `start`): ver [[Terminal]].

@@ -26,6 +26,16 @@ Não entram as consultas internas do app (a miniatura da tela a cada 5 s e a con
 - **↑ / ↓** percorrem o que foi enviado antes, para editar e mandar de novo (hook `CmdInput`).
 - Só com a VM ligada. Desligada, o terminal mostra o histórico da última execução.
 
+## Sugestões ao digitar
+Enquanto você digita, o prompt sugere comandos do [[Catalogo de comandos]], cada um com o uso e a descrição (o texto vem do próprio QEMU, em inglês):
+
+- **Comandos do monitor** (`monitor` na lista): `info reg` → `info registers [-a|vcpu]`, com a descrição completa embaixo. `info ` sozinho lista os 70 `info …`.
+- **Comandos QMP** (`QMP`): no prompt comum, digitar `query-sta` oferece `query-status`; ao aceitar, o prompt vira a mensagem pronta, `{"execute": "query-status"}` (com os argumentos obrigatórios em branco, quando há).
+- **Dentro de uma mensagem QMP**: em `{"execute": "blockdev-ch…` sugere os nomes dos comandos; em `"arguments": {"fi…` sugere os argumentos daquele comando que ainda faltam (tipo, obrigatório ou opcional, descrição, e os valores possíveis dos enums).
+- Com o comando do monitor já completo e os argumentos sendo digitados, o uso e a descrição ficam à vista.
+- Teclas: **↑ / ↓** escolhem, **Tab** aceita, **Esc** fecha, **Enter** envia o que está digitado (ou aceita, se você escolheu um item com as setas); o clique também aceita. Sem sugestões abertas, ↑ / ↓ voltam a percorrer o histórico.
+- O navegador baixa o catálogo uma vez (`GET /terminal/commands.json`, `TerminalController`) e filtra no próprio navegador; o código está no hook `CmdInput` (`assets/js/hooks/cmd_input.js`).
+
 ## Editar a linha de partida
 O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor com os argumentos que o app montaria para esta VM. Vale a partir do **próximo boot**.
 
@@ -44,6 +54,8 @@ O botão **Editar linha de partida** (no cabeçalho do terminal) abre um editor 
 
 ## Pendente
 - [x] Editar a linha de partida direto no terminal.
-- [ ] **Sugestões ao digitar**: nome, uso e descrição de cada comando, a partir do [[Catalogo de comandos]] (já gerado, falta ligar ao terminal).
+- [x] **Sugestões ao digitar**: nome, uso e descrição de cada comando, a partir do [[Catalogo de comandos]].
+- [ ] Traduzir as descrições do catálogo (hoje em inglês, como o QEMU as escreve).
+- [ ] Sugerir também os argumentos dos comandos do monitor e os valores dos enums dentro de uma mensagem QMP.
 - [ ] **Comandos salvos**: um arquivo JSON onde o usuário guarda comandos com nome (ex.: `start`), cada um com uma sequência de comandos executada na VM selecionada.
 - [ ] Teste do app aberto em janela larga: o painel ocupa ~11 rem e aperta a página em janelas baixas (dá para recolher).

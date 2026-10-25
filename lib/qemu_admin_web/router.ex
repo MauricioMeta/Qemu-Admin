@@ -21,5 +21,8 @@ defmodule QemuAdminWeb.Router do
   scope "/", QemuAdminWeb do
     # the screenshot QEMU writes every few seconds (VM list, overview)
     get "/vms/:id/screen.png", ScreenController, :show
+
+    # the commands the Terminal's prompt suggests from
+    get "/terminal/commands.json", TerminalController, :catalog
   end
 end

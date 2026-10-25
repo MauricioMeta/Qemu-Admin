@@ -19,7 +19,8 @@ Nada foi implementado em 2026-10-25 além do que está em [[Estado do Projeto]];
 - [ ] **Desktop gráfico para o Pi** — depende da rede do Pi. Ver [[Raspberry Pi 32 bits e desktop]].
 - [ ] **Organizar o pacote de 2012** — `Workspace_Qemu/vms/qemu` (QEMU antigo + Wheezy) está dentro de `vms/`; mover para fora do workspace. Ver [[Pacote RPi QEMU 2012]].
 - [x] **Terminal** — o painel de comandos passou a se chamar Terminal; catálogo de todos os comandos do QEMU gerado ([[Catalogo de comandos]]).
-- [ ] **Terminal: sugestões ao digitar e comandos salvos** — ver [[Terminal]].
+- [x] **Terminal: sugestões ao digitar** — feito; ver [[Terminal]].
+- [ ] **Terminal: comandos salvos** (ex.: `start`, em um arquivo JSON) — ver [[Terminal]].
 - [ ] **Limpar settings** — o `settings.json` da pasta de dados pode guardar workspaces temporários na lista de recentes.
 
 ## Contexto

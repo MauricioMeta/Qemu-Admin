@@ -8,6 +8,9 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   QEMU. The prompt recalls what was sent before with the arrow keys, to edit
   and send again (`CmdInput` hook).
 
+  As one types, the prompt suggests commands, with their usage and
+  description, from `priv/terminal/commands.json` (the `CmdInput` hook).
+
   The entries are a stream (`@streams.cmds`); the times come as UTC and the
   `CmdLog` hook shows them in the local zone. The launch line can be edited
   there (`edit`: nil or `%{text:, error:}`): what is saved is the VM's own
@@ -164,7 +167,13 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             Nada ainda. Ligue a VM e digite um comando abaixo.
           </div>
         </div>
-        <form id="cmd-form" phx-submit="cmd_send" class="flex items-center gap-2 px-3 py-2" autocomplete="off">
+        <form id="cmd-form" phx-submit="cmd_send" class="relative flex items-center gap-2 px-3 py-2" autocomplete="off">
+          {!-- the suggestions: filled by the CmdInput hook, LiveView leaves it alone --}
+          <div
+            id="cmd-suggest"
+            phx-update="ignore"
+            class="absolute inset-x-3 bottom-full z-30 mb-1 hidden overflow-hidden rounded-lg border border-primary/25 bg-base-200 text-xs shadow-xl"
+          />
           <span class="font-mono text-xs text-primary">›</span>
           <input
             id="cmd-input"
