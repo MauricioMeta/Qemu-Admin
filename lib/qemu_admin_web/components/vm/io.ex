@@ -53,15 +53,16 @@ defmodule QemuAdminWeb.Components.Vm.Io do
 
   def render(assigns) do
     ~F"""
-    <div id="vm-io" class="min-h-0 flex-1 overflow-y-auto p-5">
-      <div class="grid gap-4 2xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+    <div id="vm-io" class="@container min-h-0 flex-1 overflow-y-auto p-3 @3xl:p-5">
+      {!-- by the width of this view, not the window's: beside the serial it is one column --}
+      <div class="grid gap-3 @3xl:gap-4 @4xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <section class="qa-card p-4">
-          <div class="mb-3 flex items-center gap-2 text-xs">
+          <div class="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
             <.icon name="hero-cpu-chip" class="size-4 text-primary" />
             <span class="font-semibold">{@board.name}</span>
             <span class="text-base-content/45">{@board.chip}</span>
-            <span class="flex-1" />
-            <span class={"text-base-content/50", "text-error": match?(%{status: :error}, @gpio)}>{status(@gpio, @rt)}</span>
+            <span class="hidden flex-1 @xl:block" />
+            <span class={"w-full text-[0.68rem] text-base-content/50 @xl:w-auto", "text-error": match?(%{status: :error}, @gpio)}>{status(@gpio, @rt)}</span>
           </div>
           <div class="mx-auto max-w-3xl">
             <BoardSvg board={@board} gpio={@gpio} on={running?(@rt)} />
@@ -83,7 +84,7 @@ defmodule QemuAdminWeb.Components.Vm.Io do
           </p>
         </section>
 
-        <section class="qa-card p-4">
+        <section class="qa-card min-w-0 overflow-x-auto p-4">
           <h3 class="qa-label mb-2">Pinos em uso</h3>
           <table class="data-table">
             <thead><tr><th class="fill">Pino</th><th>Direção</th><th>Nível</th><th /></tr></thead>

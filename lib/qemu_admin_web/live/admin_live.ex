@@ -2053,7 +2053,7 @@ defmodule QemuAdminWeb.AdminLive do
       <SerialConsole vm={@vm} rt={@rt} />
       <aside
         id="board-side"
-        class="flex min-h-0 w-[min(34rem,45%)] shrink-0 flex-col overflow-y-auto border-l border-primary/20 bg-base-100"
+        class="flex min-h-0 w-[min(34rem,45%)] min-w-[16rem] shrink-0 flex-col overflow-y-auto border-l border-primary/20 bg-base-100"
       >
         {#if @drawn?}
           <Io vm={@vm} rt={@rt} board={@board} gpio={@gpio} />
