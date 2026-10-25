@@ -2280,7 +2280,7 @@ defmodule QemuAdminWeb.AdminLive do
       {#match "log"}
         <Log lines={@streams.log} />
       {#match _}
-        {#if Vm.mcu?(@vm)}
+        {#if Vm.serial?(@vm)}
           {board_overview(assigns)}
         {#else}
           <Overview
