@@ -1,0 +1,278 @@
+/* See the Tailwind configuration guide for advanced usage
+   https://tailwindcss.com/docs/configuration */
+
+@import "tailwindcss" source(none);
+/* xterm.js — the ESP32's serial console (hooks/serial_term.js) */
+@import "../node_modules/@xterm/xterm/css/xterm.css";
+@source "../css";
+@source "../js";
+@source "../../lib/qemu_admin_web";
+/* A Tailwind plugin that makes "hero-#{ICON}" classes available.
+   The heroicons installation itself is managed by your mix.exs */
+@plugin "../vendor/heroicons";
+
+/* daisyUI with every built-in theme, selectable at runtime from the rail's
+   swatch menu (stored in localStorage by the script in root.html.heex) — the
+   same arrangement as the Rockwell Viewer and Eleuther.IO. */
+@plugin "daisyui/packages/bundle/daisyui" {
+  themes: all;
+}
+
+/* "qemu" — the app's own look and the default: near-black panels with
+   QEMU's orange as the accent, the Rockwell Viewer layout in another
+   palette. Everything in the look & feel section below is derived from these
+   variables, so any other theme picked from the menu keeps the same design. */
+@plugin "daisyui/packages/bundle/daisyui-theme" {
+  name: "qemu";
+  default: true;
+  prefersdark: true;
+  color-scheme: "dark";
+  --color-base-100: oklch(15.5% 0.006 60);
+  --color-base-200: oklch(19% 0.009 60);
+  --color-base-300: oklch(23.5% 0.012 60);
+  --color-base-content: oklch(95% 0.012 70);
+  --color-primary: oklch(72% 0.18 50);
+  --color-primary-content: oklch(16% 0.03 50);
+  --color-secondary: oklch(78% 0.13 200);
+  --color-secondary-content: oklch(15% 0.03 200);
+  --color-accent: oklch(80% 0.14 110);
+  --color-accent-content: oklch(15% 0.03 110);
+  --color-neutral: oklch(26% 0.014 60);
+  --color-neutral-content: oklch(94% 0.01 70);
+  --color-info: oklch(76% 0.12 225);
+  --color-info-content: oklch(14% 0.03 225);
+  --color-success: oklch(76% 0.17 150);
+  --color-success-content: oklch(14% 0.03 150);
+  --color-warning: oklch(83% 0.16 85);
+  --color-warning-content: oklch(16% 0.03 85);
+  --color-error: oklch(66% 0.23 25);
+  --color-error-content: oklch(97% 0.01 25);
+  --radius-selector: 0.25rem;
+  --radius-field: 0.25rem;
+  --radius-box: 0.375rem;
+  --size-selector: 0.21875rem;
+  --size-field: 0.21875rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* Add variants based on LiveView classes */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+
+/* Use the data attribute for dark mode  */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* Make LiveView wrapper divs transparent for layout */
+[data-phx-session], [data-phx-teleported-src] { display: contents }
+
+/* ==========================================================================
+   Look & feel — the Rockwell Viewer shell (icon rail, side panel, main area,
+   status footer), built from the active theme's variables only.
+   ========================================================================== */
+
+:root {
+  --font-mono-stack: "JetBrains Mono", "Fira Code", ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas,
+    monospace;
+  /* One height for the window's top line and its bars (the rail's logo, the
+     panel's header, the page's toolbar, the tabs), and the width of the
+     collapsed rail. */
+  --qa-bar: 34px;
+  --qa-rail: 42px;
+}
+
+html, body {
+  height: 100%;
+  background-color: var(--color-base-100);
+  font-family: var(--font-mono-stack);
+}
+
+/* Faint grid behind everything, as in Eleuther.IO. */
+body {
+  background-image:
+    linear-gradient(color-mix(in oklch, var(--color-primary) 4%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklch, var(--color-primary) 4%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-attachment: fixed;
+}
+
+::selection {
+  background: color-mix(in oklch, var(--color-primary) 35%, transparent);
+  color: var(--color-base-content);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--color-primary) 55%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklch, var(--color-primary) 55%, transparent);
+  border-radius: 999px;
+}
+
+.text-glow {
+  text-shadow: 0 0 6px currentColor, 0 0 18px currentColor;
+}
+
+.svg-glow {
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 9px currentColor);
+}
+
+/* Opaque panels (rail, side panel, footer). The backdrop-filter makes each
+   panel its own stacking context — the rail's theme menu counts on that. */
+.panel-glass {
+  background: linear-gradient(180deg, var(--color-base-200), var(--color-base-100));
+  backdrop-filter: blur(6px);
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 4px currentColor, 0 0 10px currentColor; }
+  50% { opacity: 0.55; box-shadow: 0 0 2px currentColor, 0 0 4px currentColor; }
+}
+
+.status-dot-live {
+  animation: pulse-glow 1.6s ease-in-out infinite;
+}
+
+/* Data tables — disks, ISOs, QEMU candidates. One column per header, as wide
+   as its widest content; `.fill` takes what is left and `.clip` cuts long
+   text inside its cell. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.data-table th {
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  white-space: nowrap;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: color-mix(in oklch, var(--color-base-content) 40%, transparent);
+}
+
+.data-table td {
+  padding: 0.3rem 0.75rem;
+  white-space: nowrap;
+  vertical-align: middle;
+  border-top: 1px solid color-mix(in oklch, var(--color-base-content) 6%, transparent);
+}
+
+.data-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.data-table tbody tr:hover {
+  background-color: color-mix(in oklch, var(--color-primary) 5%, transparent);
+}
+
+.data-table .fill {
+  width: 100%;
+}
+
+.data-table .clip {
+  display: block;
+  max-width: 28rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The side panel's right edge (PanelResizer hook): a strip over the border
+   that lights up on hover and while dragging. */
+.side-panel-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -3px;
+  width: 6px;
+  z-index: 20;
+  cursor: col-resize;
+  touch-action: none;
+  transition: background-color 0.15s;
+}
+
+.side-panel-resizer:hover,
+.qa-resizing .side-panel-resizer {
+  background-color: color-mix(in oklch, var(--color-primary) 45%, transparent);
+}
+
+.qa-resizing,
+.qa-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* The open VMs' tabs (`App.Tabs`), square like the Rockwell Viewer's: the
+   one on screen sits on the strip's line with the colour of the area below
+   and a 2 px line of the primary colour at the top. */
+.qa-tab[data-active] {
+  position: relative;
+  z-index: 1;
+  background-color: var(--color-base-100);
+  box-shadow: inset 0 2px 0 0 var(--color-primary);
+}
+
+.qa-no-scrollbar {
+  scrollbar-width: none;
+}
+
+.qa-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* The VM console (`Vm.Console`, hooks/vnc_console.js): noVNC draws a canvas
+   inside `[data-screen]`; in fullscreen the frame is black. */
+.qa-console [data-screen] {
+  width: 100%;
+  height: 100%;
+}
+
+.qa-console:fullscreen {
+  background: #000;
+}
+
+/* A screenshot thumbnail: the VM's screen, letterboxed. */
+.qa-screen {
+  background:
+    radial-gradient(ellipse at center, color-mix(in oklch, var(--color-primary) 7%, transparent), transparent 70%),
+    var(--color-base-300);
+  object-fit: contain;
+}
+
+/* Form fields of the pages (VM form, disks, settings): compact, themed. */
+.qa-field {
+  width: 100%;
+  border-radius: var(--radius-field);
+  border: 1px solid color-mix(in oklch, var(--color-base-content) 14%, transparent);
+  background-color: color-mix(in oklch, var(--color-base-100) 70%, transparent);
+  padding: 0.35rem 0.55rem;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.qa-field:focus {
+  border-color: color-mix(in oklch, var(--color-primary) 60%, transparent);
+}
+
+.qa-label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in oklch, var(--color-base-content) 50%, transparent);
+}
+
+.qa-card {
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in oklch, var(--color-primary) 15%, transparent);
+  background: linear-gradient(180deg, var(--color-base-200), var(--color-base-100));
+}

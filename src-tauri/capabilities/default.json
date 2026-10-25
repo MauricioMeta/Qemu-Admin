@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "O que a barra de título desenhada pelo app precisa: arrastar a janela e os três botões à direita. Fechar é `destroy`: a página só fecha depois de perguntar sobre as VMs ligadas (o shell intercepta o CloseRequested). A UI vem do release do Elixir em loopback, numa porta sorteada a cada inicialização — para o Tauri isso é uma origem remota, e sem as URLs abaixo o IPC da barra é recusado. Só o loopback entra na lista.",
+  "windows": ["main"],
+  "local": true,
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-minimize",
+    "core:window:allow-close",
+    "core:window:allow-destroy"
+  ]
+}

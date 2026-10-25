@@ -1,0 +1,10 @@
+{
+  "name": "qemu_admin_assets",
+  "private": true,
+  "description": "Pacotes servidos localmente (sem CDN), empacotados pelo esbuild. noVNC: o console das VMs; xterm.js: a serial do ESP32.",
+  "dependencies": {
+    "@novnc/novnc": "1.7.0",
+    "@xterm/addon-fit": "0.10.0",
+    "@xterm/xterm": "5.5.0"
+  }
+}

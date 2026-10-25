@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>QEMU Admin</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        background: #100d0b;
+        color: #f08a3c;
+        font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+        /* The faint grid the app itself uses, so the splash and the loaded
+           page read as the same surface rather than two screens. */
+        background-image:
+          linear-gradient(rgba(240, 138, 60, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(240, 138, 60, 0.04) 1px, transparent 1px);
+        background-size: 32px 32px;
+        user-select: none;
+      }
+
+      /* The window is undecorated, so this bar is the only way to move or
+         close it — including when the boot fails and this page is replaced by
+         the error. Same height and colours as the bar the Elixir app draws
+         under its default theme, so the handover doesn't jump. */
+      .titlebar {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        height: 32px;
+        border-bottom: 1px solid rgba(240, 138, 60, 0.2);
+        background: rgba(24, 19, 16, 0.92);
+      }
+
+      /* Nothing in the bar takes the pointer except the buttons: what is left
+         is the bar itself, which is what carries the drag region. */
+      .titlebar .label,
+      .titlebar .spacer {
+        pointer-events: none;
+      }
+
+      .titlebar .label {
+        padding-left: 0.75rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.2em;
+        color: rgba(255, 240, 228, 0.45);
+      }
+
+      .titlebar .label span {
+        color: rgba(255, 240, 228, 0.7);
+      }
+
+      .titlebar .spacer {
+        flex: 1;
+      }
+
+      .titlebar button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: rgba(255, 240, 228, 0.55);
+        cursor: pointer;
+        transition:
+          background-color 0.12s ease,
+          color 0.12s ease;
+      }
+
+      .titlebar button:hover {
+        background: rgba(255, 240, 228, 0.1);
+        color: rgba(255, 240, 228, 0.95);
+      }
+
+      .titlebar button.close:hover {
+        background: #b8353a;
+        color: #fff;
+      }
+
+      /* The window opens maximized, so the button starts as "restore" and the
+         two glyphs swap from the bar's state. */
+      .titlebar .restore,
+      .titlebar[data-maximized] .maximize {
+        display: none;
+      }
+
+      .titlebar[data-maximized] .restore {
+        display: block;
+      }
+
+      main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+      }
+
+      .brand-mark {
+        width: 148px;
+        height: 148px;
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        letter-spacing: 0.35em;
+        text-shadow: 0 0 12px rgba(240, 138, 60, 0.5);
+      }
+
+      h1 span {
+        color: #fff0e4;
+      }
+
+      p {
+        margin: 0;
+        font-size: 0.75rem;
+        letter-spacing: 0.12em;
+        color: rgba(255, 240, 228, 0.4);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .brand-mark {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="titlebar" data-tauri-drag-region="true">
+      <div class="label">QEMU<span>.ADMIN</span></div>
+      <div class="spacer"></div>
+
+      <button type="button" data-action="minimize" title="Minimizar">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor">
+          <path d="M0 5.5h10" />
+        </svg>
+      </button>
+      <button type="button" data-action="maximize" title="Maximizar">
+        <svg
+          class="maximize"
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+        >
+          <rect x="0.5" y="0.5" width="9" height="9" />
+        </svg>
+        <svg
+          class="restore"
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+        >
+          <rect x="0.5" y="2.5" width="7" height="7" />
+          <path d="M2.5 2.5v-2h7v7h-2" />
+        </svg>
+      </button>
+      <button type="button" data-action="close" class="close" title="Fechar">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor">
+          <path d="M0.5 0.5l9 9M9.5 0.5l-9 9" />
+        </svg>
+      </button>
+    </header>
+
+    <main id="app">
+      <img
+        class="brand-mark"
+        src="./qemu-admin-mark.svg"
+        alt="QEMU Admin"
+        width="148"
+        height="148"
+      />
+
+      <h1>QEMU<span>.ADMIN</span></h1>
+      <p>iniciando…</p>
+    </main>
+
+    <script>
+      // The global comes from a script Tauri injects, which does not reliably
+      // beat this one (tauri-apps/tauri#12990) — so it is read per call rather
+      // than kept in a variable taken at load time.
+      const tauriWindow = () => window.__TAURI__?.window?.getCurrentWindow?.();
+      const titlebar = document.querySelector(".titlebar");
+
+      const sync = async () => {
+        const appWindow = tauriWindow();
+        if (!appWindow) return false;
+        titlebar.toggleAttribute("data-maximized", await appWindow.isMaximized());
+        return true;
+      };
+
+      titlebar.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-action]");
+        const appWindow = tauriWindow();
+        if (!button || !appWindow) return;
+
+        if (button.dataset.action === "minimize") appWindow.minimize();
+        if (button.dataset.action === "maximize") appWindow.toggleMaximize().then(sync);
+        if (button.dataset.action === "close") appWindow.close();
+      });
+
+      window.addEventListener("resize", sync);
+
+      // The first read can land before the global exists, and on a window that
+      // opens maximized and is never touched no resize follows to correct it.
+      // A few tries, then it stops asking.
+      (async () => {
+        for (let attempt = 0; attempt < 10; attempt++) {
+          if (await sync()) return;
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+      })();
+    </script>
+  </body>
+</html>

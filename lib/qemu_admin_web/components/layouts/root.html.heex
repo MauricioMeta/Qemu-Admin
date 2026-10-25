@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} /> <.live_title
+      default="QEMU Admin"
+      suffix=""
+      phx-no-format
+    >{assigns[:page_title]}</.live_title>
+    <link rel="icon" type="image/svg+xml" href={~p"/images/logo.svg"} />
+    <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
+    <!-- an ES module: noVNC (the VM console) uses top-level await -->
+    <script defer phx-track-static type="module" src={~p"/assets/js/app.js"}>
+    </script>
+
+    <script>
+      // Theme chosen in the rail's swatch menu (a `phx:set-theme` event carrying
+      // `data-phx-theme`), kept in localStorage; "qemu" until one is chosen.
+      // Runs before the body paints, so the page never flashes another theme.
+      (() => {
+        const setTheme = (theme) => {
+          theme = theme || "qemu";
+          try { localStorage.setItem("phx:theme", theme); } catch (_e) {}
+          document.documentElement.setAttribute("data-theme", theme);
+        };
+        let saved = null;
+        try { saved = localStorage.getItem("phx:theme"); } catch (_e) {}
+        setTheme(saved);
+        window.addEventListener("storage", (e) => e.key === "phx:theme" && setTheme(e.newValue));
+        window.addEventListener("phx:set-theme", (e) => setTheme(e.target.dataset.phxTheme));
+      })();
+
+      // Side panel width dragged by the user (PanelResizer hook), before the
+      // first paint too.
+      try {
+        const w = parseInt(localStorage.getItem("qa:side-panel-w"), 10);
+        if (w > 0) document.documentElement.style.setProperty("--side-panel-w", `${w}px`);
+      } catch (_e) {}
+    </script>
+  </head>
+
+  <body>
+    {@inner_content}
+  </body>
+</html>
