@@ -45,7 +45,7 @@ defmodule QemuAdminWeb.Components.App.IconButton do
       disabled={@disabled}
       data-confirm={@confirm}
       class={
-        "grid h-7 shrink-0 place-items-center rounded hover:bg-base-300 disabled:pointer-events-none disabled:opacity-30",
+        "grid h-7 shrink-0 place-items-center rounded hover:bg-base-300 disabled:pointer-events-none disabled:opacity-40",
         "size-7": @icon != nil,
         "px-2 gap-1 grid-flow-col font-mono text-[0.68rem]": @icon == nil,
         "text-primary": @active == true,

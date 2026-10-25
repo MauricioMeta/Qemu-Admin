@@ -2401,8 +2401,8 @@ defmodule QemuAdminWeb.AdminLive do
           title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
           click="powerdown_vm"
           value={@vm.id}
-          icon="hero-power"
-          tone="warning"
+          icon="hero-stop-solid"
+          tone="error"
           disabled={stopped?(@rt)}
         />
         <IconButton
