@@ -20,6 +20,11 @@ Linhas com a hora local, um prefixo e o texto:
 
 Não entram as consultas internas do app (a miniatura da tela a cada 5 s e a consulta de estado) nem os `STOP`/`RESUME` do gdbstub das placas ESP32/Arduino.
 
+## Tamanho
+O Terminal tem altura fixa (18 rem por padrão), que se **arrasta pela borda de cima** (a faixa fina com uma linha que acende ao passar o mouse; duplo clique volta ao padrão). A altura fica em `--terminal-h` no `<html>`, é guardada no navegador (`qa:terminal-h`) e aplicada antes do primeiro desenho (`root.html.heex`), como a largura do painel lateral. Hook `DockResizer` (`assets/js/hooks/dock_resizer.js`), mínimo de 120 px e máximo de 80% da janela.
+
+Dentro dele, o histórico ocupa o que sobra; os painéis de comandos salvos e da linha de partida rolam sozinhos, com até 45% da altura cada. A página da VM (a Serial, o Console, a Visão geral…) fica com o resto da janela, então arrastar a borda também redimensiona a Serial. O **painel lateral** (a lista de VMs) já se redimensiona pela borda direita (`PanelResizer`, duplo clique volta aos 18 rem); a faixa agora tem 8 px e uma linha visível para ser encontrada.
+
 ## Enviar
 O prompt está **sempre ativo**, com a VM ligada ou desligada. O que se digita vai para um destes lugares (`QemuAdmin.Terminal.route/1`):
 

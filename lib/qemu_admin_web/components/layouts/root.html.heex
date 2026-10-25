@@ -37,6 +37,12 @@
         const w = parseInt(localStorage.getItem("qa:side-panel-w"), 10);
         if (w > 0) document.documentElement.style.setProperty("--side-panel-w", `${w}px`);
       } catch (_e) {}
+
+      // The Terminal's height, dragged by the user (DockResizer hook).
+      try {
+        const h = parseInt(localStorage.getItem("qa:terminal-h"), 10);
+        if (h > 0) document.documentElement.style.setProperty("--terminal-h", `${h}px`);
+      } catch (_e) {}
     </script>
   </head>
 

@@ -95,7 +95,18 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
 
   def render(assigns) do
     ~F"""
-    <section id="vm-terminal" class="flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60">
+    <section
+      id="vm-terminal"
+      class="relative flex shrink-0 flex-col border-t border-primary/20 bg-base-200/60"
+      style={if @open, do: "height: var(--terminal-h, 18rem)"}
+    >
+      {!-- the top edge: drag to resize the Terminal (the DockResizer hook), double click for the default --}
+      <div
+        id="terminal-resizer"
+        phx-hook="DockResizer"
+        class="dock-resizer"
+        title="Arraste para redimensionar · duplo clique volta ao padrão"
+      />
       <div class="flex min-h-8 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1 text-xs">
         <button
           type="button"
@@ -106,7 +117,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
         >
           <.icon name={if @open, do: "hero-chevron-down", else: "hero-chevron-up"} class="size-3.5" />
           <.icon name="hero-command-line" class="size-4" />
-          <span class="qa-label mb-0">Terminal</span>
+          <span class="text-[0.62rem] font-semibold uppercase leading-none tracking-[0.06em] text-base-content/60">Terminal</span>
         </button>
         <span class="min-w-0 flex-1" />
         <span :if={@vm.command not in [nil, ""]} class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning">
@@ -134,7 +145,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
       <section
         :if={@open and @panel}
         id="saved-panel"
-        class="max-h-56 space-y-2 overflow-y-auto border-t border-primary/15 px-3 py-2 text-xs"
+        class="max-h-[45%] shrink-0 space-y-2 overflow-y-auto border-t border-primary/15 px-3 py-2 text-xs"
       >
         <div class="flex items-center gap-2">
           <h4 class="qa-label mb-0 text-primary">Comandos salvos</h4>
@@ -271,7 +282,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
         id="cmd-edit-form"
         phx-change="cmd_edit_change"
         phx-submit="cmd_edit_save"
-        class="flex flex-col gap-2 border-t border-primary/15 px-3 py-2"
+        class="flex max-h-[45%] shrink-0 flex-col gap-2 overflow-y-auto border-t border-primary/15 px-3 py-2"
       >
         <p class="text-[0.68rem] text-base-content/55">
           Os argumentos de <code class="text-primary/80">{Path.basename(@exe)}</code>. No lugar das portas que o app escolhe a cada
@@ -314,16 +325,12 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           </button>
         </div>
       </form>
-      <div :if={@open} class="flex flex-col">
+      <div :if={@open} class="flex min-h-0 flex-1 flex-col">
         <div
           id="vm-cmds"
           phx-hook="CmdLog"
           phx-update="stream"
-          class={
-            "overflow-y-auto border-y border-primary/10 bg-base-300/40 px-3 py-2 font-mono text-[0.68rem] leading-relaxed",
-            "h-44": is_nil(@panel) and is_nil(@edit),
-            "h-28": @panel || @edit
-          }
+          class="min-h-12 flex-1 overflow-y-auto border-y border-primary/10 bg-base-300/40 px-3 py-2 font-mono text-[0.68rem] leading-relaxed"
         >
           <div
             :for={{dom_id, e} <- @entries}
@@ -338,7 +345,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
             Nada ainda. Digite um comando abaixo.
           </div>
         </div>
-        <form id="cmd-form" phx-submit="cmd_send" class="relative flex items-center gap-2 px-3 py-2" autocomplete="off">
+        <form id="cmd-form" phx-submit="cmd_send" class="relative flex shrink-0 items-center gap-2 px-3 py-2" autocomplete="off">
           {!-- the suggestions: filled by the CmdInput hook, LiveView leaves it alone --}
           <div
             id="cmd-suggest"
