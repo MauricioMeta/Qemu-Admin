@@ -56,7 +56,7 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
         <pre class="max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[0.68rem] text-base-content/70">{Enum.join(Map.get(@rt, :tail, []), "\n")}</pre>
       </div>
 
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,var(--overview-split,1.3fr))_1rem_minmax(0,1fr)] xl:gap-x-0">
         <section class="qa-card overflow-hidden">
           <button
             type="button"
@@ -97,6 +97,16 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
             <span :if={Vm.mcu?(@vm)}>Serial (UART0){if stopped?(@rt), do: " · última execução"}</span>
           </div>
         </section>
+
+        {!-- between the two columns (wide windows): drag to resize, double click for the default --}
+        <div
+          id="overview-resizer"
+          phx-hook="SplitResizer"
+          data-var="--overview-split"
+          data-key="qa:overview-split"
+          class="split-resizer hidden xl:block"
+          title="Arraste para redimensionar · duplo clique volta ao padrão"
+        />
 
         <section :if={Vm.kind(@vm) == :esp32} class="qa-card p-4">
           <h3 class="qa-label mb-2">Placa</h3>

@@ -43,6 +43,12 @@
         const h = parseInt(localStorage.getItem("qa:terminal-h"), 10);
         if (h > 0) document.documentElement.style.setProperty("--terminal-h", `${h}px`);
       } catch (_e) {}
+
+      // The Visão geral's two columns (SplitResizer hook): the left one's share, in fr.
+      try {
+        const split = localStorage.getItem("qa:overview-split");
+        if (/^\d+(\.\d+)?fr$/.test(split || "")) document.documentElement.style.setProperty("--overview-split", split);
+      } catch (_e) {}
     </script>
   </head>
 

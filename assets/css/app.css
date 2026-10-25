@@ -245,6 +245,30 @@ body {
   height: 2px;
 }
 
+/* A strip between two columns (SplitResizer hook), a grid track of its own. */
+.split-resizer {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.split-resizer::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: 1px;
+  background-color: color-mix(in oklch, var(--color-primary) 22%, transparent);
+  transition: background-color 0.15s;
+}
+
+.split-resizer:hover::after,
+.qa-resizing .split-resizer::after {
+  background-color: var(--color-primary);
+}
+
 .qa-resizing,
 .qa-resizing * {
   cursor: col-resize !important;
