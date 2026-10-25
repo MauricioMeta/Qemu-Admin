@@ -84,7 +84,7 @@ defmodule QemuAdmin.Vm do
     "x86_64" => ~w(q35 pc microvm),
     "i386" => ~w(pc q35 isapc),
     "aarch64" => ~w(virt sbsa-ref raspi3b raspi3ap raspi4b),
-    "arm" => ~w(raspi2b raspi0 netduinoplus2),
+    "arm" => ~w(raspi2b raspi0 netduinoplus2 versatilepb),
     "xtensa" => ~w(esp32 esp32s3),
     "avr" => ~w(arduino-uno arduino-mega-2560-v3 arduino-mega)
   }
