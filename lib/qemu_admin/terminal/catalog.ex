@@ -7,7 +7,10 @@ defmodule QemuAdmin.Terminal.Catalog do
   An entry is `%{id, kind, name, usage, description, since, args, emulators}`:
 
     * `kind` — `"hmp"` (monitor command), `"qmp"`, `"event"` (QMP event, not
-      executable) or `"tool"` (a QEMU program: `qemu-img`, `qemu-io`…);
+      executable), `"tool"` (a QEMU program: `qemu-img`, `qemu-io`…) or `"saved"`
+      (a command of the user, from `terminal.json`: see `saved_entries/1`; it
+      is not in `all/0`, the page adds it, and `search/2` and `get/2` take it in
+      their `extra` option);
     * `args` — `[%{name, type, required, description}]`: a QMP command's
       arguments from the schema, a monitor command's from its usage line
       (`[interfaces] [id]` is two optional ones), a tool's a single free `args`.
@@ -25,7 +28,7 @@ defmodule QemuAdmin.Terminal.Catalog do
   """
 
   @key {__MODULE__, :index}
-  @kinds ~w(hmp qmp event tool)
+  @kinds ~w(saved hmp qmp event tool)
   @limit 40
 
   @doc "The kinds, in the order the page lists them."
@@ -35,9 +38,33 @@ defmodule QemuAdmin.Terminal.Catalog do
   @spec all() :: [map()]
   def all, do: Enum.map(index(), &elem(&1, 0))
 
-  @doc "An entry by its `id` (`\"qmp:stop\"`), or nil."
-  @spec get(String.t()) :: map() | nil
-  def get(id), do: Enum.find_value(index(), fn {e, _} -> e.id == id && e end)
+  @doc "An entry by its `id` (`\"qmp:stop\"`), or nil; `extra` are more entries (the saved ones)."
+  @spec get(String.t(), [map()]) :: map() | nil
+  def get(id, extra \\ []) do
+    Enum.find(extra, &(&1.id == id)) || Enum.find_value(index(), fn {e, _} -> e.id == id && e end)
+  end
+
+  @doc "The user's saved commands (`QemuAdmin.Terminal.Saved.load/0`) as entries of kind `\"saved\"`."
+  @spec saved_entries([map()]) :: [map()]
+  def saved_entries(commands) do
+    for c <- commands do
+      steps = c["steps"] || []
+
+      %{
+        id: "saved:#{c["name"]}",
+        kind: "saved",
+        name: c["name"],
+        usage: "#{length(steps)} #{if length(steps) == 1, do: "passo", else: "passos"}",
+        description: c["description"] || "",
+        since: nil,
+        args: [],
+        emulators: [],
+        steps: steps,
+        vm: c["vm"],
+        continue_on_error: c["continue_on_error"] == true
+      }
+    end
+  end
 
   @doc """
   The entries whose kind is `kind` (`"all"`: any) and whose name or description
@@ -61,6 +88,7 @@ defmodule QemuAdmin.Terminal.Catalog do
   @spec search(String.t() | nil, keyword()) :: {non_neg_integer(), [map()]}
   def search(text, opts \\ []) do
     limit = Keyword.get(opts, :limit, @limit)
+    extra = for e <- Keyword.get(opts, :extra, []), do: {e, postings(e)}
 
     case tokens(text) do
       [] ->
@@ -70,7 +98,7 @@ defmodule QemuAdmin.Terminal.Catalog do
         wanted = normalize(text) |> String.trim()
 
         scored =
-          for {entry, postings} <- index(),
+          for {entry, postings} <- extra ++ index(),
               scores = Enum.map(words, &word_score(postings, &1)),
               Enum.all?(scores, &(&1 > 0)) do
             bonus = if normalize(entry.name) == wanted, do: 100, else: 0
@@ -113,7 +141,7 @@ defmodule QemuAdmin.Terminal.Catalog do
   string, or JSON when it starts with `{`, `[` or a quote).
   """
   @spec line(map(), %{optional(String.t()) => String.t()}) :: String.t() | nil
-  def line(%{kind: "event"}, _values), do: nil
+  def line(%{kind: kind}, _values) when kind in ["event", "saved"], do: nil
 
   def line(%{kind: "qmp"} = e, values) do
     args =
@@ -241,6 +269,7 @@ defmodule QemuAdmin.Terminal.Catalog do
       {Enum.map_join(e.args, " ", & &1.name), 5},
       {e.usage, 3},
       {e.description, 2},
+      {Enum.join(Map.get(e, :steps, []), " "), 2},
       {Enum.map_join(e.args, " ", & &1.description), 1}
     ]
 

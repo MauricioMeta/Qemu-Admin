@@ -69,7 +69,6 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdminWeb.Components.Files.Picker
   alias QemuAdminWeb.Components.Pages.{Disks, SettingsNav}
   alias QemuAdminWeb.Components.Pages.Commands, as: CommandsPage
-  alias QemuAdminWeb.Components.Pages.Catalog, as: CatalogPage
   alias QemuAdminWeb.Components.Pages.Images, as: ImagesPage
   alias QemuAdminWeb.Components.Pages.Qemu, as: QemuPage
   alias QemuAdminWeb.Components.Pages.Settings, as: SettingsPage
@@ -146,7 +145,6 @@ defmodule QemuAdminWeb.AdminLive do
     "images" => "Imagens",
     "qemu" => "QEMU",
     "commands" => "Comandos",
-    "catalog" => "Catálogo",
     "settings" => "Configurações"
   }
 
@@ -252,8 +250,14 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("nav", %{"view" => "commands"}, socket),
     do: {:noreply, socket |> assign(view: "commands", mode: nil) |> load_commands()}
 
-  def handle_event("nav", %{"view" => "catalog"}, socket),
-    do: {:noreply, socket |> assign(view: "catalog", mode: nil) |> load_commands()}
+  # The Terminal's "linha de partida editada" badge: the Comandos page, on that tab.
+  def handle_event("open_launch", _params, socket) do
+    {:noreply,
+     socket
+     |> update(:cat, &%{&1 | kind: "launch"})
+     |> assign(view: "commands", mode: nil)
+     |> load_commands()}
+  end
 
   def handle_event("nav", %{"view" => "settings"}, socket),
     do: {:noreply, assign(socket, view: "settings", mode: nil)}
@@ -698,7 +702,7 @@ defmodule QemuAdminWeb.AdminLive do
   # ---- the Catálogo page: QEMU's commands, searched, filtered and filled in
 
   def handle_event("cat_search", %{"q" => q}, socket) do
-    {total, found} = Catalog.search(q)
+    {total, found} = Catalog.search(q, extra: saved_entries(socket))
     {:noreply, update(socket, :cat, &%{&1 | gq: q, gres: found, gtotal: total, gopen: true})}
   end
 
@@ -717,7 +721,7 @@ defmodule QemuAdminWeb.AdminLive do
   end
 
   def handle_event("cat_pick", %{"id" => id}, socket) do
-    case Catalog.get(id) do
+    case Catalog.get(id, saved_entries(socket)) do
       nil -> {:noreply, socket}
       e -> {:noreply, cat_pick(socket, e)}
     end
@@ -726,7 +730,7 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_event("cat_filter", %{"q" => q}, socket),
     do: {:noreply, update(socket, :cat, &%{&1 | q: q})}
 
-  def handle_event("cat_kind", %{"kind" => kind}, socket) when kind in ~w(all hmp qmp event tool),
+  def handle_event("cat_kind", %{"kind" => kind}, socket) when kind in ~w(all saved hmp qmp event tool launch),
     do: {:noreply, update(socket, :cat, &%{&1 | kind: kind})}
 
   def handle_event("cat_select", %{"id" => id}, socket) do
@@ -740,6 +744,10 @@ defmodule QemuAdminWeb.AdminLive do
     vals = for {k, v} <- Map.get(params, "v", %{}), is_binary(v), into: %{}, do: {k, v}
     {:noreply, update(socket, :cat, &%{&1 | vals: vals, to: Map.get(params, "to", &1.to)})}
   end
+
+  # A saved command, run on the selected VM like one typed in its Terminal.
+  def handle_event("cat_run", %{"name" => name}, socket),
+    do: handle_event("cmd_send", %{"cmd" => name}, socket)
 
   # Sends the filled-in line to the selected VM's Terminal: it runs apart from the
   # page and shows in the history like anything typed there.
@@ -835,6 +843,7 @@ defmodule QemuAdminWeb.AdminLive do
       {:noreply,
        socket
        |> assign(cp: %{cp | editing: nil, error: nil})
+       |> update(:cat, &%{&1 | kind: "saved", q: "", sel: "saved:#{command["name"]}", vals: %{}})
        |> load_commands()
        |> put_flash(:info, "Comando salvo: #{command["name"]}")}
     else
@@ -848,7 +857,13 @@ defmodule QemuAdminWeb.AdminLive do
 
   def handle_event("cp_delete", %{"name" => name}, socket) do
     case Saved.delete(name) do
-      :ok -> {:noreply, socket |> load_commands() |> put_flash(:info, "Comando excluído: #{name}")}
+      :ok ->
+        {:noreply,
+         socket
+         |> update(:cat, &%{&1 | sel: nil})
+         |> load_commands()
+         |> put_flash(:info, "Comando excluído: #{name}")}
+
       {:error, msg} -> {:noreply, put_flash(socket, :error, msg)}
     end
   end
@@ -1245,7 +1260,7 @@ defmodule QemuAdminWeb.AdminLive do
       session["view"] == "vms" and session["selected"] in tabs ->
         open_vm(socket, session["selected"])
 
-      session["view"] in ~w(disks images qemu commands catalog settings) ->
+      session["view"] in ~w(disks images qemu commands settings) ->
         {:noreply, socket} = handle_event("nav", %{"view" => session["view"]}, socket)
         socket
 
@@ -1365,6 +1380,8 @@ defmodule QemuAdminWeb.AdminLive do
       _ -> put_flash(socket, :error, "Comando salvo não encontrado: #{name}")
     end
   end
+
+  defp saved_entries(socket), do: Catalog.saved_entries(socket.assigns.cp_commands)
 
   defp vm_name(socket_assigns) do
     case find_vm(socket_assigns.vms, socket_assigns.selected) do
@@ -2019,17 +2036,12 @@ defmodule QemuAdminWeb.AdminLive do
           {#elseif @view == "qemu"}
             {header_bar(assign(assigns, crumbs: ["QEMU"]))}
             <QemuPage qemu={@qemu} install={@install} install_esp={@install_esp} />
-          {#elseif @view == "catalog"}
-            {header_bar(assign(assigns, crumbs: ["Catálogo", "comandos do QEMU"]))}
-            <CatalogPage
-              cat={@cat}
-              entries={Catalog.all()}
-              saved={Enum.map(@cp_commands, & &1["name"])}
-              vm_name={vm_name(assigns)}
-            />
           {#elseif @view == "commands"}
-            {header_bar(assign(assigns, crumbs: ["Comandos", "terminal.json"]))}
+            {header_bar(assign(assigns, crumbs: ["Comandos", "meus e do QEMU"]))}
             <CommandsPage
+              cat={@cat}
+              entries={Catalog.saved_entries(@cp_commands) ++ Catalog.all()}
+              vm_name={vm_name(assigns)}
               commands={@cp_commands}
               vms={@vms}
               editing={@cp.editing}

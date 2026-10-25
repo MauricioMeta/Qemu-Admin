@@ -130,8 +130,7 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
         <button
           :if={@vm.command not in [nil, ""]}
           type="button"
-          phx-click="nav"
-          phx-value-view="commands"
+          phx-click="open_launch"
           class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning hover:bg-warning/25"
           title="A linha de partida desta VM foi editada: abrir a página Comandos"
         >

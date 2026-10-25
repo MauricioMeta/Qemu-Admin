@@ -76,6 +76,7 @@ defmodule QemuAdminWeb.AdminLiveTest do
     {:ok, vm} = VmStore.create(%{"name" => "Box"})
     {:ok, view, _html} = live(conn, "/")
     view |> element("#nav-commands") |> render_click()
+    view |> element("#cat-tab-launch") |> render_click()
     assert has_element?(view, "#lp-#{vm.id}")
 
     view |> element("#lp-#{vm.id} button", "Editar linha de partida") |> render_click()
@@ -94,6 +95,7 @@ defmodule QemuAdminWeb.AdminLiveTest do
     {:ok, view, _html} = live(conn, "/")
     view |> element("#nav-commands") |> render_click()
     assert has_element?(view, "#commands-page")
+    view |> element("#cat-tab-saved") |> render_click()
     assert render(view) =~ "Nenhum comando salvo ainda"
 
     view |> element("#cp-new") |> render_click()
@@ -111,6 +113,11 @@ defmodule QemuAdminWeb.AdminLiveTest do
     view |> form("#cp-form", saved: %{name: "parar", description: "pausa", steps: "qmp: stop"}) |> render_submit()
     refute has_element?(view, "#cp-form")
     assert has_element?(view, "#cp-parar", "qmp: stop")
+
+    # the saved command is found by the same search as QEMU's own
+    html = view |> form("#cat-search-form", q: "pausa") |> render_change()
+    assert html =~ "cat-results"
+    assert has_element?(view, "#cat-results button[phx-value-id='saved:parar']")
     assert [%{"name" => "parar", "steps" => ["qmp: stop"]}] = QemuAdmin.Terminal.Saved.list("qualquer")
 
     view |> element("#cp-parar button[phx-click=cp_edit]") |> render_click()
@@ -158,8 +165,8 @@ hmp: info status"}) |> render_submit()
 
   test "the Catálogo page: search, table filter, argument editor, adding a step", %{conn: conn} do
     {:ok, view, _html} = live(conn, "/")
-    view |> element("#nav-catalog") |> render_click()
-    assert has_element?(view, "#catalog")
+    view |> element("#nav-commands") |> render_click()
+    assert has_element?(view, "#commands-page")
     view |> form("#cat-filter", q: "stop") |> render_change()
     assert has_element?(view, "[id='cat-row-qmp:stop']")
 
@@ -192,7 +199,7 @@ hmp: info status"}) |> render_submit()
   test "the Catálogo adds a step to an existing saved command", %{conn: conn} do
     :ok = QemuAdmin.Terminal.Saved.save(%{"name" => "parar", "description" => "", "vm" => nil, "steps" => ["qmp: stop"], "continue_on_error" => false})
     {:ok, view, _html} = live(conn, "/")
-    view |> element("#nav-catalog") |> render_click()
+    view |> element("#nav-commands") |> render_click()
     view |> form("#cat-filter", q: "cont") |> render_change()
     view |> element("[id='cat-row-qmp:cont']") |> render_click()
     view |> form("#cat-form", to: "parar") |> render_change()
