@@ -192,7 +192,8 @@ defmodule QemuAdminWeb.AdminLive do
        close: nil,
        log_seq: 0,
        cmds_open: true,
-       cmd_history: []
+       cmd_history: [],
+       cmd_edit: nil
      )
      |> stream_configure(:log, dom_id: &"log-#{&1.id}")
      |> stream(:log, [])
@@ -564,6 +565,75 @@ defmodule QemuAdminWeb.AdminLive do
 
   def handle_event("cmds_toggle", _params, socket),
     do: {:noreply, update(socket, :cmds_open, &(not &1))}
+
+  # The launch line, edited in the command panel: `cmd_edit` is nil or
+  # `%{text:, error:}`; saving keeps it in the VM (`command`), empty restores
+  # the one the app builds.
+  def handle_event("cmd_edit", _params, socket) do
+    case current(socket) do
+      {vm, _rt} ->
+        text = if vm.command in [nil, ""], do: Args.template(vm), else: vm.command
+        {:noreply, assign(socket, cmd_edit: %{text: text, error: nil}, cmds_open: true)}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("cmd_edit_change", %{"text" => text}, %{assigns: %{cmd_edit: edit}} = socket)
+      when is_map(edit),
+      do: {:noreply, assign(socket, cmd_edit: %{edit | text: text})}
+
+  def handle_event("cmd_edit_change", _params, socket), do: {:noreply, socket}
+
+  def handle_event("cmd_edit_cancel", _params, socket),
+    do: {:noreply, assign(socket, cmd_edit: nil)}
+
+  def handle_event("cmd_edit_reset", _params, socket) do
+    case current(socket) do
+      {vm, _rt} ->
+        VmStore.save(%{vm | command: ""})
+
+        {:noreply,
+         socket
+         |> assign(cmd_edit: nil)
+         |> load_vms()
+         |> refresh_command()
+         |> put_flash(:info, "Linha de partida padrão restaurada")}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("cmd_edit_save", %{"text" => text}, socket) do
+    with {vm, _rt} <- current(socket) do
+      text = text |> String.replace(~r/\s*\R\s*/, " ") |> String.trim()
+
+      # what the app builds itself is not stored: it follows the VM's settings
+      custom? = text != Args.template(vm)
+
+      case if(custom?, do: Args.check_command(vm, text), else: :ok) do
+        :ok ->
+          VmStore.save(%{vm | command: if(custom?, do: text, else: "")})
+
+          {:noreply,
+           socket
+           |> assign(cmd_edit: nil)
+           |> load_vms()
+           |> refresh_command()
+           |> put_flash(
+             :info,
+             if(custom?, do: "Linha de partida salva: vale no próximo boot", else: "Linha igual à padrão")
+           )}
+
+        {:error, msg} ->
+          {:noreply, assign(socket, cmd_edit: %{text: text, error: msg})}
+      end
+    else
+      _ -> {:noreply, socket}
+    end
+  end
 
   def handle_event("cmd_send", %{"cmd" => input}, socket) do
     case current(socket) do
@@ -1017,7 +1087,7 @@ defmodule QemuAdminWeb.AdminLive do
 
               Args.command_line(
                 exe,
-                Args.build(vm, %{qmp: 4444, vnc: 5900, ws: 5700, serial: 5555})
+                Args.build_run(vm, %{qmp: 4444, vnc: 5900, ws: 5700, serial: 5555, gdb: 4445})
               )
           end
 
@@ -1863,7 +1933,15 @@ defmodule QemuAdminWeb.AdminLive do
           serial_tail={@serial_tail}
         />
     {/case}
-    <Commands vm={@vm} rt={@rt} entries={@streams.cmds} history={@cmd_history} open={@cmds_open} />
+    <Commands
+      vm={@vm}
+      rt={@rt}
+      entries={@streams.cmds}
+      history={@cmd_history}
+      open={@cmds_open}
+      edit={@cmd_edit}
+      exe={QemuAdmin.Qemu.exe_name(@vm.arch)}
+    />
     """
   end
 end

@@ -42,6 +42,85 @@ defmodule QemuAdmin.Vm.Args do
 
   alias QemuAdmin.{Qemu, Vm}
 
+  # Ports no real run uses, to tell where `build/3` put them (see `template/2`).
+  @sentinels %{qmp: 41_001, ws: 41_002, serial: 41_004, gdb: 41_005, vnc: 5900 + 41_003}
+
+  @doc "What the command panel's editor can name in a custom command line."
+  def placeholders, do: ~w({qmp} {serial} {ws} {vnc} {gdb})
+
+  @doc """
+  The arguments the app builds for `vm`, as one editable string where the
+  ports it picks at each start are the placeholders (`placeholders/0`).
+  """
+  def template(%Vm{} = vm, host \\ host()) do
+    vm
+    |> default_args(@sentinels, host)
+    |> Enum.map(fn arg ->
+      arg
+      |> String.replace("41001", "{qmp}")
+      |> String.replace("41002", "{ws}")
+      |> String.replace("41004", "{serial}")
+      |> String.replace("41005", "{gdb}")
+      |> String.replace("41003", "{vnc}")
+    end)
+    |> join()
+  end
+
+  # `gdb` is a port only for the boards whose pins are followed through it
+  defp default_args(vm, ports, host) do
+    ports = if Vm.kind(vm) in [:esp32, :avr], do: ports, else: Map.delete(ports, :gdb)
+    build(%{vm | command: ""}, ports, host)
+  end
+
+  @doc """
+  The arguments to run: the VM's own command line (`Vm` `command`) with the
+  ports filled in, or the one `build/3` makes.
+  """
+  def build_run(vm, ports, host \\ host())
+
+  def build_run(%Vm{command: command} = vm, ports, host) when command in [nil, ""],
+    do: build(vm, ports, host)
+
+  def build_run(%Vm{command: command} = vm, ports, host) do
+    case Vm.split_args(command) do
+      {:ok, args} -> Enum.map(args, &fill(&1, ports))
+      _ -> build(vm, ports, host)
+    end
+  end
+
+  defp fill(arg, ports) do
+    arg
+    |> String.replace("{qmp}", to_string(ports.qmp))
+    |> String.replace("{ws}", to_string(ports.ws))
+    |> String.replace("{serial}", to_string(ports.serial))
+    |> String.replace("{vnc}", to_string(ports.vnc - 5900))
+    |> String.replace("{gdb}", to_string(Map.get(ports, :gdb, "")))
+  end
+
+  @doc """
+  Whether `text` can be a VM's command line: well-formed, and keeping what
+  the app needs to control the VM — the QMP socket, the UART of a board and
+  the gdbstub of the boards whose pins are followed.
+  """
+  def check_command(%Vm{} = vm, text) do
+    needed =
+      ["{qmp}"] ++
+        if(Vm.serial?(vm), do: ["{serial}"], else: []) ++
+        if Vm.kind(vm) in [:esp32, :avr], do: ["{gdb}"], else: []
+
+    with {:ok, args} <- Vm.split_args(text) |> or_error("aspas sem fechar"),
+         true <- args != [] || {:error, "a linha está vazia"},
+         [] <- Enum.reject(needed, &String.contains?(text, &1)) do
+      :ok
+    else
+      {:error, msg} -> {:error, msg}
+      missing when is_list(missing) -> {:error, "faltam #{Enum.join(missing, ", ")}: o app não controlaria a VM sem eles"}
+    end
+  end
+
+  defp or_error({:ok, _} = ok, _msg), do: ok
+  defp or_error(_, msg), do: {:error, msg}
+
   @doc "The emulator's arguments (not the executable)."
   def build(vm, ports, host \\ host())
 
@@ -377,8 +456,11 @@ defmodule QemuAdmin.Vm.Args do
   end
 
   @doc "The command line as one string, for the page (and for copying into a terminal)."
-  def command_line(exe, args) do
-    Enum.map_join([exe | args], " ", fn arg ->
+  def command_line(exe, args), do: join([exe | args])
+
+  # arguments with spaces or quotes are quoted
+  defp join(args) do
+    Enum.map_join(args, " ", fn arg ->
       if arg =~ ~r/[\s"]/, do: ~s("#{String.replace(arg, "\"", "\\\"")}"), else: arg
     end)
   end

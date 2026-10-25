@@ -71,6 +71,14 @@ defmodule QemuAdmin.Qemu do
     end
   end
 
+  @doc "The emulator's file name as the command line shows it, found or not."
+  def exe_name(arch) do
+    case system_exe(arch) do
+      {:ok, exe} -> exe
+      _ -> "qemu-system-#{arch}"
+    end
+  end
+
   def system_exe("xtensa"), do: QemuAdmin.Qemu.Esp.exe()
   def system_exe(arch), do: exe("qemu-system-#{arch}")
 

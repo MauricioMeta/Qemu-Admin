@@ -199,7 +199,7 @@ defmodule QemuAdmin.VmServer do
     Logger.metadata(vm: vm.id)
 
     ports = alloc_ports(vm)
-    args = Args.build(vm, ports)
+    args = Args.build_run(vm, ports)
     command = Args.command_line(exe, args)
 
     File.mkdir_p!(Vm.dir(vm))

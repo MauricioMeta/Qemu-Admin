@@ -29,6 +29,10 @@ defmodule QemuAdmin.Vm do
 
   The ESP32, the Arduino and the Cortex-M boards are microcontrollers
   (`mcu?/1`): their console is the UART. A Raspberry Pi has a screen and a UART (`serial?/1`).
+  `command`, when not empty, replaces the command line the app would build
+  (`QemuAdmin.Vm.Args.build_run/3`): the arguments as one string, where
+  `{qmp}`, `{serial}`, `{ws}`, `{vnc}` and `{gdb}` stand for the ports the app
+  picks at each start. It is edited in the page's command panel.
   `firmware` and `app` remember what was last written (AtomVM's version,
   the `.avm`, the Arduino's program), for the page. What a PC has and a
   board has not — CD, UEFI, video card, a choice of accelerator — is fixed
@@ -64,6 +68,7 @@ defmodule QemuAdmin.Vm do
             kernel: "",
             dtb: "",
             append: "",
+            command: "",
             created_at: nil
 
   @type t :: %__MODULE__{}

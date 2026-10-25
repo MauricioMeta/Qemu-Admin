@@ -9,8 +9,12 @@ defmodule QemuAdminWeb.Components.Vm.Commands do
   and send again (`CmdInput` hook).
 
   The entries are a stream (`@streams.cmds`); the times come as UTC and the
-  `CmdLog` hook shows them in the local zone. Events: `cmd_send` (`cmd`),
-  `cmds_toggle`.
+  `CmdLog` hook shows them in the local zone. The launch line can be edited
+  there (`edit`: nil or `%{text:, error:}`): what is saved is the VM's own
+  command line (`Vm` `command`), with `{qmp}`, `{serial}`… for the ports,
+  used from the next start. Events: `cmd_send` (`cmd`), `cmds_toggle`,
+  `cmd_edit`, `cmd_edit_change`, `cmd_edit_save`, `cmd_edit_reset`,
+  `cmd_edit_cancel`.
   """
 
   use Surface.Component
@@ -28,6 +32,12 @@ defmodule QemuAdminWeb.Components.Vm.Commands do
   prop history, :list, default: []
 
   prop open, :boolean, default: true
+
+  @doc "The launch line's editor: nil (closed) or `%{text:, error:}`."
+  prop edit, :any, default: nil
+
+  @doc "The emulator's executable, shown before the edited arguments."
+  prop exe, :string, default: ""
 
   defp prefix("launch"), do: "$"
   defp prefix("sent"), do: "›"
@@ -70,10 +80,70 @@ defmodule QemuAdminWeb.Components.Vm.Commands do
           <.icon name="hero-command-line" class="size-4" />
           <span class="qa-label mb-0">Comandos</span>
         </button>
-        <span class="truncate text-[0.65rem] text-base-content/40">
+        <span class="min-w-0 flex-1 truncate text-[0.65rem] text-base-content/40">
           o que foi enviado ao QEMU (QMP) · envie o seu: comando do monitor ou JSON
         </span>
+        <span :if={@vm.command not in [nil, ""]} class="shrink-0 whitespace-nowrap rounded bg-warning/15 px-1.5 py-0.5 text-[0.62rem] text-warning">
+          linha de partida editada
+        </span>
+        <button
+          type="button"
+          id="cmd-edit"
+          phx-click="cmd_edit"
+          class="shrink-0 rounded border border-primary/30 px-2 py-0.5 text-[0.68rem] text-primary hover:bg-primary/10"
+          title="Editar a linha de comando com que a VM é iniciada"
+        >
+          Editar linha de partida
+        </button>
       </div>
+      <form
+        :if={@open and @edit}
+        id="cmd-edit-form"
+        phx-change="cmd_edit_change"
+        phx-submit="cmd_edit_save"
+        class="flex flex-col gap-2 border-t border-primary/15 px-3 py-2"
+      >
+        <p class="text-[0.68rem] text-base-content/55">
+          Os argumentos de <code class="text-primary/80">{Path.basename(@exe)}</code>. No lugar das portas que o app escolhe a cada
+          início, use {#for p <- QemuAdmin.Vm.Args.placeholders()}<code class="mr-1.5 text-primary/80">{p}</code>{/for}.
+          Vale a partir do <strong>próximo boot</strong>{if running?(@rt), do: " (a VM está ligada)"}.
+        </p>
+        <textarea
+          id="cmd-edit-text"
+          name="text"
+          rows="5"
+          spellcheck="false"
+          phx-debounce="300"
+          class={"qa-field font-mono !text-[0.68rem]", "!border-error": @edit.error}
+        >{@edit.text}</textarea>
+        <p :if={@edit.error} class="text-[0.68rem] text-error">{@edit.error}</p>
+        <div class="flex items-center gap-2">
+          <button
+            type="submit"
+            id="cmd-edit-save"
+            class="rounded-md bg-primary px-3 py-1 text-xs font-semibold text-primary-content hover:brightness-110"
+          >
+            Salvar
+          </button>
+          <button
+            type="button"
+            id="cmd-edit-cancel"
+            phx-click="cmd_edit_cancel"
+            class="rounded-md border border-base-content/20 px-3 py-1 text-xs hover:bg-base-300"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            id="cmd-edit-reset"
+            phx-click="cmd_edit_reset"
+            class="ml-auto rounded-md border border-base-content/20 px-3 py-1 text-xs hover:bg-base-300"
+            title="Voltar à linha que o app monta sozinho"
+          >
+            Restaurar a padrão
+          </button>
+        </div>
+      </form>
       <div :if={@open} class="flex flex-col">
         <div
           id="vm-cmds"
