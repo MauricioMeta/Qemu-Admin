@@ -2357,63 +2357,65 @@ defmodule QemuAdminWeb.AdminLive do
       saved={@saved}
     >
       <:controls>
-        {#if stopped?(@rt)}
+        {!-- always the same set, so nothing jumps around: what does not apply is dimmed --}
+        <IconButton
+          id="vm-start"
+          title="Ligar"
+          click="start_vm"
+          value={@vm.id}
+          icon="hero-play-solid"
+          tone="success"
+          disabled={not stopped?(@rt) or is_nil(@qemu.dir)}
+        />
+        {#if paused?(@rt)}
           <IconButton
-            id="vm-start"
-            title="Ligar"
-            click="start_vm"
+            id="vm-resume"
+            title="Continuar"
+            click="resume_vm"
             value={@vm.id}
             icon="hero-play-solid"
             tone="success"
-            disabled={is_nil(@qemu.dir)}
           />
         {#else}
-          {#if paused?(@rt)}
-            <IconButton
-              id="vm-resume"
-              title="Continuar"
-              click="resume_vm"
-              value={@vm.id}
-              icon="hero-play-solid"
-              tone="success"
-            />
-          {#else}
-            <IconButton
-              id="vm-pause"
-              title="Pausar"
-              click="pause_vm"
-              value={@vm.id}
-              icon="hero-pause-solid"
-            />
-          {/if}
           <IconButton
-            id="vm-reset"
-            title="Reiniciar (reset)"
-            click="reset_vm"
+            id="vm-pause"
+            title="Pausar"
+            click="pause_vm"
             value={@vm.id}
-            icon="hero-arrow-path"
-            tone="warning"
-            confirm="Reiniciar a VM agora? É como apertar o botão de reset."
-          />
-          <IconButton
-            id="vm-powerdown"
-            title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
-            click="powerdown_vm"
-            value={@vm.id}
-            icon="hero-power"
-            tone="warning"
-          />
-          <IconButton
-            :if={is_nil(Vm.board(@vm))}
-            id="vm-quit"
-            title="Forçar desligamento"
-            click="quit_vm"
-            value={@vm.id}
-            icon="hero-bolt-slash"
-            tone="error"
-            confirm="Forçar o desligamento? É como tirar da tomada."
+            icon="hero-pause-solid"
+            disabled={stopped?(@rt)}
           />
         {/if}
+        <IconButton
+          id="vm-reset"
+          title="Reiniciar (reset)"
+          click="reset_vm"
+          value={@vm.id}
+          icon="hero-arrow-path"
+          tone="warning"
+          confirm="Reiniciar a VM agora? É como apertar o botão de reset."
+          disabled={stopped?(@rt)}
+        />
+        <IconButton
+          id="vm-powerdown"
+          title={if Vm.board(@vm), do: "Desligar (cortar a energia)", else: "Desligar (ACPI)"}
+          click="powerdown_vm"
+          value={@vm.id}
+          icon="hero-power"
+          tone="warning"
+          disabled={stopped?(@rt)}
+        />
+        <IconButton
+          :if={is_nil(Vm.board(@vm))}
+          id="vm-quit"
+          title="Forçar desligamento"
+          click="quit_vm"
+          value={@vm.id}
+          icon="hero-bolt-slash"
+          tone="error"
+          confirm="Forçar o desligamento? É como tirar da tomada."
+          disabled={stopped?(@rt)}
+        />
       </:controls>
     </Terminal>
     """
