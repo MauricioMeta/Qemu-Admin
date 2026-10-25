@@ -39,8 +39,9 @@ defmodule QemuAdmin.Terminal.Macro do
       |> Enum.with_index(1)
       |> Enum.reduce_while(:ok, fn {step, n}, :ok ->
         line = expand(step, vm)
+        src = "salvo: #{name} (passo #{n}/#{total})"
 
-        case step(vm, line) do
+        case step(vm, line, src) do
           :ok ->
             {:cont, :ok}
 
@@ -75,41 +76,43 @@ defmodule QemuAdmin.Terminal.Macro do
     |> String.replace("{dir}", Vm.dir(vm))
   end
 
-  defp step(vm, "@start"), do: start(vm)
+  defp step(vm, "@start", src), do: start(vm, src)
 
-  defp step(vm, "@wait " <> n) do
+  defp step(vm, "@wait " <> n, src) do
+    x = Terminal.begin(vm.id, "@wait #{String.trim(n)}", src, "app")
+
     case Integer.parse(String.trim(n)) do
       {secs, ""} when secs >= 0 ->
-        Terminal.log(vm.id, "typed", "@wait #{secs}")
         Process.sleep(min(secs, @max_wait) * 1000)
+        Terminal.log(vm.id, "received", "esperou #{min(secs, @max_wait)} s", x)
         :ok
 
       _ ->
-        Terminal.log(vm.id, "error", "@wait espera um número de segundos")
+        Terminal.log(vm.id, "error", "@wait espera um número de segundos", x)
         :error
     end
   end
 
-  defp step(vm, line), do: Terminal.execute(vm, line)
+  defp step(vm, line, src), do: Terminal.execute(vm, line, src)
 
-  defp start(vm) do
-    Terminal.log(vm.id, "typed", "@start")
+  defp start(vm, src) do
+    x = Terminal.begin(vm.id, "@start", src, "app")
 
     if VmSupervisor.running?(vm.id) do
-      Terminal.log(vm.id, "received", "a VM já está ligada")
+      Terminal.log(vm.id, "received", "a VM já está ligada", x)
       :ok
     else
       with {:ok, _pid} <- VmSupervisor.start_vm(vm),
            :ok <- wait_running(vm.id, System.monotonic_time(:millisecond) + @start_timeout) do
-        Terminal.log(vm.id, "received", "VM ligada")
+        Terminal.log(vm.id, "received", "VM ligada", x)
         :ok
       else
         {:error, msg} when is_binary(msg) ->
-          Terminal.log(vm.id, "error", msg)
+          Terminal.log(vm.id, "error", msg, x)
           :error
 
         _ ->
-          Terminal.log(vm.id, "error", "a VM não chegou a ligar")
+          Terminal.log(vm.id, "error", "a VM não chegou a ligar", x)
           :error
       end
     end

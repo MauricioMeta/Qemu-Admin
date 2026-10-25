@@ -174,9 +174,13 @@ defmodule QemuAdmin.Gpio do
   def handle_info(:poll, state) do
     Process.send_after(self(), :poll, @poll)
 
-    case VmServer.qmp(state.id, "human-monitor-command", %{
-           "command-line" => Raspi.command(state.board)
-         }) do
+    # the app's own polling: not the user's, so it stays out of the Terminal's history
+    case VmServer.qmp(
+           state.id,
+           "human-monitor-command",
+           %{"command-line" => Raspi.command(state.board)},
+           silent: true
+         ) do
       {:ok, text} when is_binary(text) ->
         b = Raspi.parse(state.b, text)
         state = %{state | b: b, status: :polling}

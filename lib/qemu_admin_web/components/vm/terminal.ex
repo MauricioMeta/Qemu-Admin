@@ -29,6 +29,9 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
   import QemuAdminWeb.CoreComponents, only: [icon: 1]
   import QemuAdminWeb.VmHelpers
 
+  alias Phoenix.LiveView.JS
+  alias QemuAdmin.Terminal.Groups
+
   prop vm, :struct, required: true
   prop rt, :map, required: true
 
@@ -60,6 +63,22 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
     |> Enum.map(&Map.take(&1, ["name", "description", "steps"]))
     |> Jason.encode!()
   end
+
+  # what a line of a command is, when it is opened
+  defp caption("sent"), do: "enviado ao QEMU"
+  defp caption("tool"), do: "processo"
+  defp caption("received"), do: "resposta"
+  defp caption("event"), do: "evento"
+  defp caption("error"), do: "erro"
+  defp caption(_), do: ""
+
+  defp status_class(:error), do: "text-error"
+  defp status_class(:done), do: "text-success"
+  defp status_class(_), do: "text-base-content/40"
+
+  defp status_text(:error), do: "erro"
+  defp status_text(:done), do: "ok"
+  defp status_text(_), do: "…"
 
   defp prefix("launch"), do: "$"
   defp prefix("tool"), do: "$"
@@ -247,10 +266,13 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
               spellcheck="false"
               phx-debounce="300"
               class="qa-field font-mono !text-[0.68rem]"
-              placeholder={"@start\ninfo status\nqemu-img info disk0.qcow2"}
+              placeholder={"@start\nqmp: query-status\nhmp: info registers\ncli: qemu-img info {dir}/disk0.qcow2"}
             >{@panel.editing["steps"]}</textarea>
             <p class="mt-1 text-[0.62rem] text-base-content/45">
-              Cada passo é como se digita aqui: <code>info registers</code>, <code>{"{\"execute\": \"stop\"}"}</code>, <code>qemu-img info disk0.qcow2</code>.
+              Um prefixo diz como o passo chega ao QEMU:
+              <code>qmp: stop</code> (comando QMP; argumentos em JSON: <code>{"qmp: block_resize {\"device\": \"d0\", \"size\": 1048576}"}</code>),
+              <code>hmp: info registers</code> (monitor) ou
+              <code>cli: qemu-img info disk0.qcow2</code> (ferramenta do QEMU, um processo). Sem prefixo, o Terminal descobre sozinho, como quando você digita.
               Do app: <code>@start</code> (liga a VM e espera) e <code>@wait 3</code> (segundos).
               <code>{"{vm}"}</code>, <code>{"{name}"}</code> e <code>{"{dir}"}</code> viram o id, o nome e a pasta da VM. Linhas com # são ignoradas.
             </p>
@@ -332,14 +354,35 @@ defmodule QemuAdminWeb.Components.Vm.Terminal do
           phx-update="stream"
           class="min-h-12 flex-1 overflow-y-auto border-y border-primary/10 bg-base-300/40 px-3 py-2 font-mono text-[0.68rem] leading-relaxed"
         >
-          <div
-            :for={{dom_id, e} <- @entries}
-            id={dom_id}
-            class={"flex gap-2", tone(e.dir)}
-          >
-            <span class="shrink-0 text-base-content/30" data-utc={e.at}>{time(e.at)}</span>
-            <span class="w-9 shrink-0 text-right">{prefix(e.dir)}</span>
-            <span class="min-w-0 flex-1 whitespace-pre-wrap break-all">{e.text}</span>
+          <div :for={{dom_id, e} <- @entries} id={dom_id}>
+            {!-- a command: one line that opens to what went to QEMU, the answer and the events (like NBSim's history) --}
+            {#if e.dir == "cmd"}
+              <details class="group" phx-mounted={JS.ignore_attributes(["open"])}>
+                <summary class="flex cursor-pointer list-none items-baseline gap-2 rounded px-0.5 hover:bg-primary/5 [&::-webkit-details-marker]:hidden">
+                  <span class="shrink-0 text-base-content/30" data-utc={e.at}>{time(e.at)}</span>
+                  <.icon name="hero-chevron-right" class="size-3 shrink-0 self-center text-base-content/40 transition-transform group-open:rotate-90" />
+                  <span class="min-w-0 max-w-[55%] shrink-0 truncate font-semibold text-primary" title={e.text}>{e.text}</span>
+                  <span :if={e[:via]} class="shrink-0 rounded bg-primary/10 px-1 text-[0.58rem] text-primary/80">{e[:via]}</span>
+                  <span :if={e[:src]} class="shrink-0 rounded bg-base-content/10 px-1 text-[0.58rem] text-base-content/55">{e[:src]}</span>
+                  <span class="min-w-0 flex-1 truncate text-base-content/45 group-open:invisible">{Groups.preview(e)}</span>
+                  <span class={"shrink-0 text-[0.62rem]", status_class(Groups.status(e))}>{status_text(Groups.status(e))}</span>
+                </summary>
+                <div class="mb-1 ml-5 space-y-0.5 border-l border-primary/20 py-1 pl-2">
+                  <div :for={i <- e.items} class={"flex gap-2", tone(i.dir)}>
+                    <span class="w-28 shrink-0 text-right text-[0.6rem] uppercase tracking-wide text-base-content/35">{caption(i.dir)}</span>
+                    <span class="min-w-0 flex-1 whitespace-pre-wrap break-all">{i.text}</span>
+                  </div>
+                  <p :if={e.items == []} class="text-base-content/35">Nada foi enviado.</p>
+                </div>
+              </details>
+            {#else}
+              {!-- a line on its own: the launch command, a saved command's start and end, an older history --}
+              <div class={"flex gap-2", tone(e.dir)}>
+                <span class="shrink-0 text-base-content/30" data-utc={e.at}>{time(e.at)}</span>
+                <span class="w-9 shrink-0 text-right">{prefix(e.dir)}</span>
+                <span class="min-w-0 flex-1 whitespace-pre-wrap break-all">{e.text}</span>
+              </div>
+            {/if}
           </div>
           <div id="vm-cmds-empty" class="hidden only:block text-base-content/35">
             Nada ainda. Digite um comando abaixo.

@@ -83,7 +83,7 @@ defmodule QemuAdmin.Terminal do
          {:ok, [_ | args]} <- Vm.split_args(String.trim(input)),
          {:ok, exe} <- find(name) do
       File.mkdir_p!(Vm.dir(vm))
-      execute(exe, args, Vm.dir(vm))
+      spawn_tool(exe, args, Vm.dir(vm))
     else
       {:error, msg} when is_binary(msg) -> {:error, msg}
       {:error, :no_qemu} -> {:error, "QEMU não encontrado: veja a página QEMU"}
@@ -94,7 +94,7 @@ defmodule QemuAdmin.Terminal do
   defp find("qemu-system-" <> arch), do: Qemu.system_exe(arch)
   defp find(name), do: Qemu.exe(name)
 
-  defp execute(exe, args, dir) do
+  defp spawn_tool(exe, args, dir) do
     port =
       Port.open({:spawn_executable, exe}, [
         :binary,
@@ -157,79 +157,189 @@ defmodule QemuAdmin.Terminal do
   or `:error` when it failed — a tool that exits with a code other than 0, a
   command QEMU refused, a monitor or QMP command with the VM off.
   """
-  def execute(%Vm{} = vm, input) do
+  def execute(%Vm{} = vm, input, src \\ "digitado") do
     input = String.trim(input)
 
-    case route(input) do
-      {:tool, _name} ->
-        log(vm.id, "tool", input)
+    case parse(input) do
+      {:qmp, rest} ->
+        case qmp_message(rest) do
+          {:ok, json} -> monitor(vm, json, rest, src, "QMP", [])
+          {:error, msg} -> fail(vm, rest, src, "QMP", msg)
+        end
 
-        case run(vm, input) do
-          {:ok, output, status} ->
-            log(vm.id, "received", if(output == "", do: "(sem saída)", else: output))
+      {:hmp, rest} ->
+        monitor(vm, rest, rest, src, "monitor (HMP)", mode: :hmp)
 
-            if status == 0 do
-              :ok
-            else
-              log(vm.id, "error", "saiu com o código #{status}")
-              :error
-            end
+      {:cli, rest} ->
+        case route(rest) do
+          {:tool, _name} ->
+            tool(vm, rest, src)
 
           {:error, msg} ->
-            log(vm.id, "error", msg)
-            :error
+            fail(vm, rest, src, "linha de comando", msg)
+
+          :monitor ->
+            fail(
+              vm,
+              rest,
+              src,
+              "linha de comando",
+              "cli: só roda as ferramentas do QEMU (qemu-img, qemu-io, qemu-system-* -machine help…)"
+            )
+        end
+
+      {:auto, line} ->
+        case route(line) do
+          {:tool, _name} -> tool(vm, line, src)
+          {:error, msg} -> fail(vm, line, src, "linha de comando", msg)
+          :monitor -> monitor(vm, line, line, src, nil, [])
+        end
+    end
+  end
+
+  # `qmp: …`, `hmp: …` and `cli: …` say how a line goes to QEMU; anything else is routed by what it is
+  defp parse("qmp:" <> rest), do: {:qmp, String.trim(rest)}
+  defp parse("hmp:" <> rest), do: {:hmp, String.trim(rest)}
+  defp parse("cli:" <> rest), do: {:cli, String.trim(rest)}
+  defp parse(line), do: {:auto, line}
+
+  @doc """
+  The QMP message a `qmp:` step says: a whole message (`{"execute": "stop"}`) or
+  a command name with optional arguments as a JSON object (`block_resize {"device": "d0", "size": 1048576}`).
+  `{:ok, json}` or `{:error, message}`.
+  """
+  def qmp_message(text) do
+    case String.trim(text) do
+      "" ->
+        {:error, "qmp: espera um comando (stop) ou uma mensagem ({\"execute\": \"stop\"})"}
+
+      "{" <> _ = json ->
+        {:ok, json}
+
+      text ->
+        {name, args} =
+          case String.split(text, ~r/\s+/, parts: 2) do
+            [name] -> {name, nil}
+            [name, args] -> {name, args}
+          end
+
+        cond do
+          not Regex.match?(~r/^[A-Za-z][A-Za-z0-9_-]*$/, name) ->
+            {:error, "qmp: #{name} não é um nome de comando QMP"}
+
+          is_nil(args) ->
+            {:ok, Jason.encode!(%{execute: name})}
+
+          true ->
+            case Jason.decode(args) do
+              {:ok, %{} = a} -> {:ok, Jason.encode!(%{execute: name, arguments: a})}
+              _ -> {:error, "qmp: os argumentos de #{name} devem ser um objeto JSON ({\"device\": \"d0\"})"}
+            end
+        end
+    end
+  end
+
+  # a QEMU tool: the entry shows the process that really runs
+  defp tool(vm, input, src) do
+    x = begin(vm.id, input, src, "linha de comando")
+    log(vm.id, "tool", process_text(vm, input), x)
+
+    case run(vm, input) do
+      {:ok, output, status} ->
+        log(vm.id, "received", if(output == "", do: "(sem saída)", else: output), x)
+
+        if status == 0 do
+          :ok
+        else
+          log(vm.id, "error", "saiu com o código #{status}", x)
+          :error
         end
 
       {:error, msg} ->
-        log(vm.id, "typed", input)
-        log(vm.id, "error", msg)
+        log(vm.id, "error", msg, x)
         :error
-
-      :monitor ->
-        if VmSupervisor.running?(vm.id) do
-          # the VmServer logs what it sends, the answer and the QMP errors
-          case VmServer.console(vm.id, input) do
-            {:ok, _} -> :ok
-            _ -> :error
-          end
-        else
-          log(vm.id, "typed", input)
-
-          log(
-            vm.id,
-            "error",
-            "a VM está desligada: os comandos do monitor e do QMP só valem com ela ligada. " <>
-              "Já dá para usar qemu-img, qemu-io e qemu-system-* -machine help (-cpu help, -version…)."
-          )
-
-          :error
-        end
     end
+  end
+
+  # `"C:\…\qemu-img.exe" info disk.qcow2` and where it runs
+  defp process_text(vm, input) do
+    with {:tool, name} <- route(input),
+         {:ok, [_ | args]} <- Vm.split_args(input),
+         {:ok, exe} <- find(name) do
+      "#{QemuAdmin.Vm.Args.command_line(exe, args)}\n(na pasta da VM: #{Vm.dir(vm)})"
+    else
+      _ -> input
+    end
+  end
+
+  # a monitor or QMP command (`json_or_line`), which needs the VM running
+  defp monitor(vm, json_or_line, label, src, via, opts) do
+    if VmSupervisor.running?(vm.id) do
+      # the VmServer opens the entry, logs what it sends, the answer and the events
+      meta = Keyword.merge([src: src, label: label], opts) ++ if(via, do: [via: via], else: [])
+
+      case VmServer.console(vm.id, json_or_line, meta) do
+        {:ok, _} -> :ok
+        _ -> :error
+      end
+    else
+      fail(
+        vm,
+        label,
+        src,
+        via || "monitor / QMP",
+        "a VM está desligada: os comandos do monitor e do QMP só valem com ela ligada. " <>
+          "Já dá para usar qemu-img, qemu-io e qemu-system-* -machine help (-cpu help, -version…)."
+      )
+    end
+  end
+
+  # a line that was not sent: its entry and why
+  defp fail(vm, label, src, via, msg) do
+    x = begin(vm.id, label, src, via)
+    log(vm.id, "error", msg, x)
+    :error
   end
 
   # ------------------------------------------------------------- history
 
   @doc """
-  Adds an entry (`dir`: `"tool"`, `"typed"`, `"received"` or `"error"`) to the
-  VM's history, and broadcasts it as `{:vm_cmd, id, entry}`.
+  Opens an entry of the VM's history: a `"cmd"` line (what the user sees as the
+  command, `src` where it came from, `via` how it reaches QEMU) that the lines
+  logged with its `x` belong to. Returns that `x`.
   """
-  def log(id, dir, text) do
-    case VmServer.log_command(id, dir, text) do
-      :ok -> :ok
-      {:error, :not_running} -> append(id, dir, text)
+  def begin(id, label, src, via) do
+    case VmServer.log_command(id, "cmd", label, %{src: src, via: via}) do
+      {:ok, seq} -> seq
+      {:error, :not_running} -> append(id, "cmd", label, %{src: src, via: via})
+    end
+  end
+
+  @doc """
+  Adds a line (`dir`: `"tool"`, `"received"`, `"error"`, `"macro"`…) to the VM's
+  history, as part of the entry `x` (see `begin/4`) or alone, and broadcasts it
+  as `{:vm_cmd, id, entry}`. Returns the line's `seq`.
+  """
+  def log(id, dir, text, x \\ nil) do
+    meta = if x, do: %{x: x}, else: %{}
+
+    case VmServer.log_command(id, dir, text, meta) do
+      {:ok, seq} -> seq
+      {:error, :not_running} -> append(id, dir, text, meta)
     end
   end
 
   # the VM is off: the file is the history
-  defp append(id, dir, text) do
+  defp append(id, dir, text, meta) do
     last = VmServer.commands(id) |> List.last()
     seq = if last, do: last.seq + 1, else: 1
     at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
-    entry = %{seq: seq, at: at, dir: dir, text: text}
+    entry = %{seq: seq, at: at, dir: dir, text: text} |> Map.merge(meta)
+    entry = if dir == "cmd", do: Map.put_new(entry, :x, seq), else: entry
     path = VmServer.commands_path(id)
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, [Jason.encode_to_iodata!(entry), "\n"], [:append])
     Phoenix.PubSub.broadcast(QemuAdmin.PubSub, QemuAdmin.topic(), {:vm_cmd, id, entry})
-    :ok
+    seq
   end
 end

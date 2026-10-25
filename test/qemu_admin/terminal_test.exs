@@ -94,15 +94,67 @@ defmodule QemuAdmin.TerminalTest do
     end
   end
 
+  describe "qmp_message/1" do
+    test "a command name, with arguments as a JSON object, or a whole message" do
+      assert {:ok, ~s({"execute":"stop"})} = Terminal.qmp_message("stop")
+      assert {:ok, ~s({"execute": "x"})} = Terminal.qmp_message(~s({"execute": "x"}))
+
+      assert {:ok, json} = Terminal.qmp_message(~s(block_resize {"device": "d0", "size": 5}))
+
+      assert %{"execute" => "block_resize", "arguments" => %{"device" => "d0", "size" => 5}} =
+               Jason.decode!(json)
+
+      assert {:error, _} = Terminal.qmp_message("")
+      assert {:error, _} = Terminal.qmp_message("stop agora")
+      assert {:error, _} = Terminal.qmp_message("1stop")
+    end
+  end
+
+  describe "execute/3 with the VM off" do
+    setup do
+      {:ok, vm} = VmStore.create(%{"name" => "off", "arch" => "x86_64", "machine" => "q35"})
+      %{vm: vm}
+    end
+
+    test "every line is an entry: what the user sees, where it came from, how it goes to QEMU", %{vm: vm} do
+      assert :error = Terminal.execute(vm, "qmp: stop", "salvo: parar (passo 1/1)")
+      assert :error = Terminal.execute(vm, "hmp: info status")
+      assert :error = Terminal.execute(vm, "cli: info status")
+
+      assert [
+               %{dir: "cmd", text: "stop", src: "salvo: parar (passo 1/1)", via: "QMP", x: 1},
+               %{dir: "error", x: 1, text: "a VM está desligada" <> _},
+               %{dir: "cmd", text: "info status", src: "digitado", via: "monitor (HMP)", x: 3},
+               %{dir: "error", x: 3},
+               %{dir: "cmd", text: "info status", via: "linha de comando", x: 5},
+               %{dir: "error", x: 5, text: "cli: só roda" <> _}
+             ] = VmServer.commands(vm.id)
+    end
+
+    test "a tool shows the process that really runs", %{vm: vm} do
+      if Qemu.exe("qemu-img") != {:error, :no_qemu} do
+        assert :ok = Terminal.execute(vm, "cli: qemu-img --version")
+
+        assert [
+                 %{dir: "cmd", via: "linha de comando", x: x},
+                 %{dir: "tool", x: x, text: process},
+                 %{dir: "received", x: x}
+               ] = VmServer.commands(vm.id)
+
+        assert process =~ "qemu-img" and process =~ "--version" and process =~ "na pasta da VM"
+      end
+    end
+  end
+
   describe "log/3 with the VM off" do
     test "the history is the file, numbered, and each entry is broadcast" do
       Phoenix.PubSub.subscribe(QemuAdmin.PubSub, QemuAdmin.topic())
       {:ok, vm} = VmStore.create(%{"name" => "historico", "arch" => "x86_64", "machine" => "q35"})
       assert VmServer.commands(vm.id) == []
 
-      assert :ok = Terminal.log(vm.id, "tool", "qemu-img info disco.qcow2")
-      assert :ok = Terminal.log(vm.id, "received", "image: disco.qcow2")
-      assert :ok = Terminal.log(vm.id, "error", "saiu com o código 1")
+      assert 1 = Terminal.log(vm.id, "tool", "qemu-img info disco.qcow2")
+      assert 2 = Terminal.log(vm.id, "received", "image: disco.qcow2")
+      assert 3 = Terminal.log(vm.id, "error", "saiu com o código 1")
 
       assert_receive {:vm_cmd, "historico", %{seq: 1, dir: "tool"}}
       assert_receive {:vm_cmd, "historico", %{seq: 3, dir: "error"}}

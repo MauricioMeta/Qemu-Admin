@@ -112,10 +112,28 @@ defmodule QemuAdmin.SavedCommandsTest do
 
     test "steps: at least one, and the app's own are only @start and @wait N" do
       assert {:error, "dê pelo menos um passo"} = Saved.validate(attrs(%{"steps" => "\n# nada\n"}))
-      assert {:error, "passo inválido: @voar"} = Saved.validate(attrs(%{"steps" => "info status\n@voar"}))
-      assert {:error, "passo inválido: @wait x"} = Saved.validate(attrs(%{"steps" => "@wait x"}))
+      assert {:error, "passo inválido: @voar" <> _} = Saved.validate(attrs(%{"steps" => "info status\n@voar"}))
+      assert {:error, "passo inválido: @wait x" <> _} = Saved.validate(attrs(%{"steps" => "@wait x"}))
       assert {:ok, %{"steps" => ["@start", "@wait 2", "info status"]}} =
                Saved.validate(attrs(%{"steps" => "@start\n\n@wait 2\n  info status  "}))
+    end
+
+    test "qmp:, hmp: and cli: say how a step goes to QEMU" do
+      steps =
+        "qmp: stop\nqmp: block_resize {\"device\": \"d0\", \"size\": 5}\nhmp: info status\ncli: qemu-img info {dir}/d.qcow2"
+
+      assert {:ok, %{"steps" => [_, _, _, _] = kept}} = Saved.validate(attrs(%{"steps" => steps}))
+      assert hd(kept) == "qmp: stop"
+
+      assert {:error, "passo inválido: qmp:" <> _} = Saved.validate(attrs(%{"steps" => "qmp:"}))
+
+      assert {:error, "passo inválido: qmp: resize {oops}" <> _} =
+               Saved.validate(attrs(%{"steps" => "qmp: resize {oops}"}))
+
+      assert {:error, "passo inválido: hmp:" <> _} = Saved.validate(attrs(%{"steps" => "hmp:  "}))
+
+      assert {:error, "passo inválido: cli: info status" <> _} =
+               Saved.validate(attrs(%{"steps" => "cli: info status"}))
     end
 
     test "the rest is normalized" do
@@ -147,7 +165,7 @@ defmodule QemuAdmin.SavedCommandsTest do
         assert File.regular?(Path.join(QemuAdmin.Vm.dir(vm), "#{vm.id}.qcow2"))
 
         assert ["disco — 3 passos", "disco — concluído"] = texts(vm.id, "macro")
-        assert ["qemu-img create -f qcow2 macro-vm.qcow2 4M", "qemu-img info macro-vm.qcow2"] = texts(vm.id, "tool")
+        assert ["qemu-img create -f qcow2 macro-vm.qcow2 4M", "@wait 0", "qemu-img info macro-vm.qcow2"] = texts(vm.id, "cmd")
         assert Enum.any?(texts(vm.id, "received"), &(&1 =~ "virtual size: 4 MiB"))
       end
     end
@@ -159,11 +177,11 @@ defmodule QemuAdmin.SavedCommandsTest do
         assert {:error, 1} = Macro.run(vm.id, %{"name" => "falha", "steps" => steps})
         assert Enum.any?(texts(vm.id, "error"), &(&1 =~ "passo 1 falhou"))
         assert List.last(texts(vm.id, "macro")) == "falha — interrompido no passo 1 de 2"
-        assert ["qemu-img info nao-existe.img"] = texts(vm.id, "tool")
+        assert ["qemu-img info nao-existe.img"] = texts(vm.id, "cmd")
 
         assert :ok = Macro.run(vm.id, %{"name" => "segue", "steps" => steps, "continue_on_error" => true})
         assert List.last(texts(vm.id, "macro")) == "segue — concluído"
-        assert "qemu-img --version" in texts(vm.id, "tool")
+        assert "qemu-img --version" in texts(vm.id, "cmd")
       end
     end
 

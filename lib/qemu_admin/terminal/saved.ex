@@ -25,14 +25,19 @@ defmodule QemuAdmin.Terminal.Saved do
     * `steps` — what to run, in order, each one as it would be typed in the
       Terminal (a QEMU tool, a monitor command, a QMP message), plus two of the
       app's own: `@start` (turns the VM on and waits until it runs) and
-      `@wait N` (N seconds). `{vm}`, `{name}` and `{dir}` in a step are the VM's
-      id, name and folder. Blank lines and lines starting with `#` are ignored;
+      `@wait N` (N seconds). A step says how it reaches QEMU with a prefix:
+      `qmp: stop` (a QMP command, with arguments as JSON — `qmp: block_resize
+      {"device": "d0", "size": 1048576}` — or a whole message), `hmp: info status`
+      (the monitor) or `cli: qemu-img info {dir}/disk0.qcow2` (a QEMU tool, a
+      process); with no prefix the Terminal tells by itself. `{vm}`, `{name}` and
+      `{dir}` in a step are the VM's id, name and folder. Blank lines and lines
+      starting with `#` are ignored;
     * `continue_on_error` — keep going when a step fails (it stops by default).
 
   See `QemuAdmin.Terminal.Macro` for how it runs.
   """
 
-  alias QemuAdmin.Paths
+  alias QemuAdmin.{Paths, Terminal}
 
   @file_name "terminal.json"
   @name_re ~r/^[A-Za-z0-9][A-Za-z0-9._-]{0,39}$/
@@ -129,8 +134,8 @@ defmodule QemuAdmin.Terminal.Saved do
       steps == [] ->
         {:error, "dê pelo menos um passo"}
 
-      bad = Enum.find(steps, &bad_step/1) ->
-        {:error, "passo inválido: #{bad}"}
+      bad = Enum.find_value(steps, &step_error/1) ->
+        {:error, bad}
 
       true ->
         {:ok,
@@ -148,11 +153,38 @@ defmodule QemuAdmin.Terminal.Saved do
   defp steps_list(list) when is_list(list), do: list
   defp steps_list(_), do: []
 
-  # `@start` and `@wait N` are the only steps the app has of its own
-  defp bad_step("@start"), do: false
-  defp bad_step("@wait " <> n), do: not match?({_, ""}, Integer.parse(String.trim(n)))
-  defp bad_step("@" <> _), do: true
-  defp bad_step(_), do: false
+  # why a step cannot run, or nil. `@start` and `@wait N` are the only steps the
+  # app has of its own; `qmp:`, `hmp:` and `cli:` say how a line goes to QEMU
+  defp step_error("@start"), do: nil
+
+  defp step_error("@wait " <> n = step) do
+    if match?({_, ""}, Integer.parse(String.trim(n))),
+      do: nil,
+      else: "passo inválido: #{step} (@wait espera um número de segundos)"
+  end
+
+  defp step_error("@" <> _ = step), do: "passo inválido: #{step} (só existem @start e @wait N)"
+
+  defp step_error("qmp:" <> rest = step) do
+    case Terminal.qmp_message(rest) do
+      {:ok, _json} -> nil
+      {:error, msg} -> "passo inválido: #{step} (#{msg})"
+    end
+  end
+
+  defp step_error("hmp:" <> rest = step) do
+    if String.trim(rest) == "", do: "passo inválido: #{step} (hmp: espera um comando do monitor)"
+  end
+
+  defp step_error("cli:" <> rest = step) do
+    case Terminal.route(String.trim(rest)) do
+      {:tool, _} -> nil
+      {:error, msg} -> "passo inválido: #{step} (#{msg})"
+      :monitor -> "passo inválido: #{step} (cli: só roda as ferramentas do QEMU: qemu-img, qemu-io, qemu-system-*)"
+    end
+  end
+
+  defp step_error(_step), do: nil
 
   @doc """
   Saves `command` (`validate/1` already applied). `original` is the name it had

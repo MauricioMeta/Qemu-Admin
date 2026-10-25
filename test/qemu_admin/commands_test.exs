@@ -39,27 +39,41 @@ defmodule QemuAdmin.CommandsTest do
       assert_receive {:vm_cmd, "cmds", %{dir: "launch", text: launch, seq: 1}}, 5_000
       assert launch =~ "-machine q35" and launch =~ "-qmp"
 
-      # a monitor command goes through human-monitor-command
-      assert {:ok, status} = VmServer.console("cmds", "info status")
+      # a monitor command goes through human-monitor-command: its entry says so, and the
+      # line logged as sent is the message that really went down the socket
+      assert {:ok, status} = VmServer.console("cmds", "info status", src: "digitado")
       assert status =~ "running"
-      assert_receive {:vm_cmd, "cmds", %{dir: "hmp", text: "info status"}}, 5_000
-      assert_receive {:vm_cmd, "cmds", %{dir: "received", text: "VM status: running"}}, 5_000
+
+      assert_receive {:vm_cmd, "cmds",
+                      %{dir: "cmd", text: "info status", src: "digitado", via: "monitor (HMP)", x: x}},
+                     5_000
+
+      assert_receive {:vm_cmd, "cmds", %{dir: "sent", x: ^x, text: wire}}, 5_000
+      assert %{"execute" => "human-monitor-command", "id" => _, "arguments" => %{"command-line" => "info status"}} = Jason.decode!(wire)
+      assert_receive {:vm_cmd, "cmds", %{dir: "received", x: ^x, text: "VM status: running"}}, 5_000
 
       # a QMP message as JSON
       assert {:ok, %{"status" => "running"}} =
                VmServer.console("cmds", ~s({"execute": "query-status"}))
 
-      assert_receive {:vm_cmd, "cmds", %{dir: "sent", text: ~s({"execute":"query-status"})}}, 5_000
+      assert_receive {:vm_cmd, "cmds", %{dir: "cmd", via: "QMP", x: x}}, 5_000
+      assert_receive {:vm_cmd, "cmds", %{dir: "sent", x: ^x, text: wire}}, 5_000
+      assert wire =~ ~r/"execute":"query-status"/ and wire =~ ~r/"id":\d+/
+      assert_receive {:vm_cmd, "cmds", %{dir: "received", x: ^x, text: answer}}, 5_000
+      assert answer =~ "running"
 
       # the page's own buttons are logged too, with the events they cause
       assert {:ok, _} = VmServer.pause("cmds")
-      assert_receive {:vm_cmd, "cmds", %{dir: "sent", text: ~s({"execute":"stop"})}}, 5_000
-      assert_receive {:vm_cmd, "cmds", %{dir: "event", text: "STOP" <> _}}, 5_000
+      assert_receive {:vm_cmd, "cmds", %{dir: "cmd", text: "Pausar", src: "botão", x: x}}, 5_000
+      assert_receive {:vm_cmd, "cmds", %{dir: "sent", x: ^x, text: stop_wire}}, 5_000
+      assert stop_wire =~ ~r/"execute":"stop"/
+      assert_receive {:vm_cmd, "cmds", %{dir: "event", x: ^x, text: "STOP" <> _}}, 5_000
       assert {:ok, _} = VmServer.resume("cmds")
 
       # a mistake is an error entry, not a crash
       assert {:error, _} = VmServer.console("cmds", ~s({"execute": "nao-existe"}))
-      assert_receive {:vm_cmd, "cmds", %{dir: "error"}}, 5_000
+      assert_receive {:vm_cmd, "cmds", %{dir: "error", x: err_x}}, 5_000
+      assert is_integer(err_x)
       assert {:error, "JSON QMP inválido" <> _} = VmServer.console("cmds", "{oops")
       assert {:error, "comando vazio"} = VmServer.console("cmds", "   ")
 

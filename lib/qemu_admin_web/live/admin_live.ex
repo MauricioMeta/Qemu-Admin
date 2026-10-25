@@ -36,6 +36,7 @@ defmodule QemuAdminWeb.AdminLive do
     Images,
     Paths,
     Qemu,
+    Session,
     Settings,
     Vm,
     VmServer,
@@ -51,7 +52,7 @@ defmodule QemuAdminWeb.AdminLive do
   alias QemuAdmin.Esp32.Flash, as: EspFlash
   alias QemuAdmin.Qemu.{Img, InstallJob}
   alias QemuAdmin.Terminal, as: TermTools
-  alias QemuAdmin.Terminal.{Macro, Saved}
+  alias QemuAdmin.Terminal.{Groups, Macro, Saved}
   alias QemuAdmin.Vm.Args
   alias QemuAdminWeb.Files
 
@@ -168,6 +169,7 @@ defmodule QemuAdminWeb.AdminLive do
        filter: "",
        selected: nil,
        tabs: [],
+       tab_views: %{},
        vm_view: "overview",
        mode: nil,
        params: %{},
@@ -195,6 +197,7 @@ defmodule QemuAdminWeb.AdminLive do
        log_seq: 0,
        cmds_open: true,
        cmd_history: [],
+       cmd_groups: %{},
        cmd_edit: nil,
        saved: [],
        saved_panel: nil
@@ -203,7 +206,9 @@ defmodule QemuAdminWeb.AdminLive do
      |> stream(:log, [])
      |> stream_configure(:cmds, dom_id: &"cmd-#{&1.seq}")
      |> stream(:cmds, [])
-     |> load_vms()}
+     |> load_vms()
+     |> restore_session()
+     |> attach_hook(:session, :after_render, &save_session/1)}
   end
 
   # ------------------------------------------------------------ navigation
@@ -254,7 +259,7 @@ defmodule QemuAdminWeb.AdminLive do
     tabs = socket.assigns.tabs
     i = Enum.find_index(tabs, &(&1 == id)) || 0
     rest = List.delete(tabs, id)
-    socket = assign(socket, tabs: rest)
+    socket = assign(socket, tabs: rest, tab_views: Map.delete(socket.assigns.tab_views, id))
 
     socket =
       if socket.assigns.selected == id do
@@ -270,7 +275,7 @@ defmodule QemuAdminWeb.AdminLive do
   end
 
   def handle_event("vm_view", %{"view" => view}, socket) do
-    {:noreply, socket |> assign(vm_view: view) |> prepare_view()}
+    {:noreply, socket |> assign(vm_view: view) |> remember_tab_view() |> prepare_view()}
   end
 
   def handle_event("show_section", %{"section" => section}, socket) do
@@ -1007,9 +1012,13 @@ defmodule QemuAdminWeb.AdminLive do
   def handle_info({:vm_log, _id, _line}, socket), do: {:noreply, socket}
 
   def handle_info({:vm_cmd, id, entry}, %{assigns: %{selected: id}} = socket) do
+    # a line of a command goes in again as its row, which is updated where it is
+    {groups, row} = Groups.add(socket.assigns.cmd_groups, entry)
+
     {:noreply,
      socket
-     |> stream_insert(:cmds, entry, limit: -@cmd_limit)
+     |> assign(cmd_groups: groups)
+     |> stream_insert(:cmds, row, limit: -@cmd_limit)
      |> update(:cmd_history, &history_add(&1, entry))}
   end
 
@@ -1086,13 +1095,70 @@ defmodule QemuAdminWeb.AdminLive do
       tabs =
         if id in socket.assigns.tabs, do: socket.assigns.tabs, else: socket.assigns.tabs ++ [id]
 
-      view = view || socket.assigns.vm_view
+      # each tab goes back to what it was showing
+      view = view || socket.assigns.tab_views[id] || "overview"
       # "flash" is an ESP32's only
       view = if Enum.any?(vm_views(vm), &(elem(&1, 0) == view)), do: view, else: "overview"
 
       socket
       |> assign(view: "vms", mode: nil, selected: id, tabs: tabs, vm_view: view)
+      |> remember_tab_view()
       |> prepare_view()
+    else
+      socket
+    end
+  end
+
+  defp remember_tab_view(%{assigns: %{selected: id, vm_view: view}} = socket) when is_binary(id),
+    do: update(socket, :tab_views, &Map.put(&1, id, view))
+
+  defp remember_tab_view(socket), do: socket
+
+  # The tabs as they were left (`QemuAdmin.Session`, session.json in the workspace):
+  # the VMs that are gone are dropped, a tab with no view goes to the overview.
+  defp restore_session(socket) do
+    session = Session.load()
+    ids = for {vm, _} <- socket.assigns.vms, do: vm.id
+    tabs = Enum.filter(session["tabs"], &(&1 in ids))
+    views = Map.take(session["views"], tabs)
+
+    socket =
+      assign(socket,
+        tabs: tabs,
+        tab_views: views,
+        cmds_open: session["terminal_open"],
+        selected: nil,
+        mode: nil
+      )
+
+    cond do
+      session["view"] == "vms" and session["selected"] in tabs ->
+        open_vm(socket, session["selected"])
+
+      session["view"] in ~w(disks images qemu settings) ->
+        {:noreply, socket} = handle_event("nav", %{"view" => session["view"]}, socket)
+        socket
+
+      true ->
+        assign(socket, view: "vms")
+    end
+  end
+
+  # after each render: write the session when it is not what the file has
+  defp save_session(socket) do
+    a = socket.assigns
+
+    session = %{
+      "view" => a.view,
+      "selected" => a.selected,
+      "tabs" => a.tabs,
+      "views" => a.tab_views,
+      "terminal_open" => a.cmds_open
+    }
+
+    if connected?(socket) and session != socket.private[:session_saved] do
+      _ = Session.save(session)
+      Phoenix.LiveView.put_private(socket, :session_saved, session)
     else
       socket
     end
@@ -1171,18 +1237,26 @@ defmodule QemuAdminWeb.AdminLive do
   # The terminal's history: this VM's, from the running server or the file.
   defp load_cmds(socket, vm) do
     entries = VmServer.commands(vm.id)
+    {groups, rows} = Groups.build(entries)
 
     socket
-    |> assign(cmd_history: Enum.reduce(entries, [], &history_add(&2, &1)))
-    |> stream(:cmds, entries, reset: true)
+    |> assign(cmd_history: Enum.reduce(entries, [], &history_add(&2, &1)), cmd_groups: groups)
+    |> stream(:cmds, rows, reset: true)
   end
 
-  # What the prompt's arrow keys recall: what was typed or sent, without repeats in a row.
-  defp history_add(history, %{dir: dir, text: text}) when dir in ["hmp", "sent", "tool", "typed"] do
-    if List.last(history) == text, do: history, else: Enum.take(history ++ [text], -100)
-  end
+  # What the prompt's arrow keys recall: what was typed (a command's own line, not
+  # its wire message), without repeats in a row.
+  defp history_add(history, %{dir: "cmd", src: "digitado", text: text}), do: remember(history, text)
+
+  defp history_add(history, %{dir: dir, text: text} = entry)
+       when dir in ["hmp", "sent", "tool", "typed"] and not is_map_key(entry, :x),
+       do: remember(history, text)
 
   defp history_add(history, _entry), do: history
+
+  defp remember(history, text) do
+    if List.last(history) == text, do: history, else: Enum.take(history ++ [text], -100)
+  end
 
   # The command line shown on the overview: the real one while running,
   # otherwise what the next start would run (ports shown as placeholders).
@@ -1304,8 +1378,9 @@ defmodule QemuAdminWeb.AdminLive do
     case Workspace.open(path) do
       {:ok, dir} ->
         socket
-        |> assign(tabs: [], selected: nil, mode: nil, workspaces: Workspace.list())
+        |> assign(workspaces: Workspace.list())
         |> load_vms()
+        |> restore_session()
         |> load_images()
         |> put_flash(:info, "Workspace: #{Workspace.name(dir)}")
 

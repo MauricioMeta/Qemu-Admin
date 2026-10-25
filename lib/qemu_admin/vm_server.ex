@@ -56,18 +56,22 @@ defmodule QemuAdmin.VmServer do
   defp via(id), do: {:via, Registry, {QemuAdmin.Registry, id}}
 
   @doc "ACPI power button: the guest shuts itself down."
-  def powerdown(id), do: qmp(id, "system_powerdown")
-  def reset(id), do: qmp(id, "system_reset")
-  def pause(id), do: qmp(id, "stop")
-  def resume(id), do: qmp(id, "cont")
+  def powerdown(id), do: qmp(id, "system_powerdown", %{}, src: "botão", label: "Desligar (botão de energia)")
+  def reset(id), do: qmp(id, "system_reset", %{}, src: "botão", label: "Reiniciar")
+  def pause(id), do: qmp(id, "stop", %{}, src: "botão", label: "Pausar")
+  def resume(id), do: qmp(id, "cont", %{}, src: "botão", label: "Retomar")
   @doc "Ends QEMU at once (pulling the plug, but QEMU flushes the disks)."
-  def quit(id), do: qmp(id, "quit")
+  def quit(id), do: qmp(id, "quit", %{}, src: "botão", label: "Encerrar agora")
 
   @doc "Inserts `path` in the VM's CD drive."
   def change_cdrom(id, path),
-    do: qmp(id, "blockdev-change-medium", %{id: "cd0", filename: path, format: "raw"})
+    do:
+      qmp(id, "blockdev-change-medium", %{id: "cd0", filename: path, format: "raw"},
+        src: "app",
+        label: "Trocar o CD"
+      )
 
-  def eject(id), do: qmp(id, "eject", %{id: "cd0", force: true})
+  def eject(id), do: qmp(id, "eject", %{id: "cd0", force: true}, src: "app", label: "Ejetar o CD")
 
   @doc "Kills the QEMU process (when QMP no longer answers)."
   def kill(id), do: call(id, :kill)
@@ -110,43 +114,54 @@ defmodule QemuAdmin.VmServer do
   @doc "The command line of the current run."
   def command_line(id), do: call(id, :command_line)
 
-  @doc "Sends a QMP command: `{:ok, return}` or `{:error, reason}`."
-  def qmp(id, command, args \\ %{}), do: call(id, {:qmp, command, args})
+  @doc """
+  Sends a QMP command: `{:ok, return}` or `{:error, reason}`. `meta` says where
+  it comes from, for the history: `:src` (`"botão"`, `"digitado"`, `"app"`…),
+  `:label` (what the user sees as the command; the QMP name by default) and
+  `:silent` (not logged: the app's own polling).
+  """
+  def qmp(id, command, args \\ %{}, meta \\ []), do: call(id, {:qmp, command, args, Map.new(meta)})
 
   @doc """
   What the user typed in the command panel: a QMP message as JSON
   (`{"execute": "query-status"}`, with optional `"arguments"`) or a monitor
   (HMP) command (`info registers`). `{:ok, answer}` or `{:error, reason}`;
-  the answer is in the history too.
+  the answer is in the history too. `meta` as in `qmp/4`, plus `mode: :hmp` to
+  make a line that starts with `{` a monitor command anyway.
   """
-  def console(id, input) do
+  def console(id, input, meta \\ []) do
+    meta = Map.new(meta)
+
     result =
-      case String.trim(input) do
-        "" ->
+      case {meta[:mode], String.trim(input)} do
+        {_, ""} ->
           {:invalid, "comando vazio"}
 
-        "{" <> _ = json ->
+        {mode, "{" <> _ = json} when mode != :hmp ->
           case Jason.decode(json) do
             {:ok, %{"execute" => cmd} = msg} when is_binary(cmd) ->
               case Map.get(msg, "arguments", %{}) do
-                args when is_map(args) -> qmp(id, cmd, args)
-                _ -> {:invalid, ~s("arguments" deve ser um objeto)}
+                args when is_map(args) ->
+                  qmp(id, cmd, args, Map.put_new(meta, :label, String.trim(json)))
+
+                _ ->
+                  {:invalid, ~s("arguments" deve ser um objeto)}
               end
 
             _ ->
               {:invalid, ~s(JSON QMP inválido; use {"execute": "query-status"})}
           end
 
-        line ->
-          call(id, {:hmp, line})
+        {_, line} ->
+          call(id, {:hmp, line, meta})
       end
 
     # what the VM answered with an error is in the history already; what was
     # wrong with the input was never sent, so it is logged here
     case result do
       {:invalid, msg} ->
-        _ = log_command(id, "typed", input)
-        _ = log_command(id, "error", msg)
+        x = header(id, input, meta[:src] || "digitado", "QMP")
+        _ = log_command(id, "error", msg, %{x: x})
         {:error, msg}
 
       other ->
@@ -154,10 +169,20 @@ defmodule QemuAdmin.VmServer do
     end
   end
 
+  # The line that opens an entry of the history: `{:ok, seq}` is the x of what follows.
+  defp header(id, label, src, via) do
+    case log_command(id, "cmd", label, %{src: src, via: via}) do
+      {:ok, seq} -> seq
+      _ -> nil
+    end
+  end
+
   @doc """
   The command history, oldest first: `%{seq:, at:, dir:, text:}` with `dir`
-  `"launch"`, `"sent"`, `"hmp"`, `"received"`, `"event"` or `"error"`. From
-  `commands.log` when the VM is not running.
+  `"launch"`, `"cmd"`, `"sent"`, `"received"`, `"event"` or `"error"`, and, for
+  what belongs to a command, `x` (the `seq` of its `"cmd"` line), `src` (where it
+  came from) and `via` (how it reached QEMU). From `commands.log` when the VM is
+  not running.
   """
   def commands(id) do
     case call(id, :commands) do
@@ -168,11 +193,12 @@ defmodule QemuAdmin.VmServer do
 
   @doc """
   Adds an entry to the history of the run (`QemuAdmin.Terminal.log/3` does it
-  for a VM that is off): `:ok` or `{:error, :not_running}`.
+  for a VM that is off): `{:ok, seq}` or `{:error, :not_running}`. `meta`: `x`,
+  `src` and `via` (see `commands/1`); a `"cmd"` line is its own `x`.
   """
-  def log_command(id, dir, text), do: call(id, {:log_cmd, dir, text}) |> only_ok()
+  def log_command(id, dir, text, meta \\ %{}), do: call(id, {:log_cmd, dir, text, meta}) |> only_ok()
 
-  defp only_ok(:ok), do: :ok
+  defp only_ok({:ok, seq}), do: {:ok, seq}
   defp only_ok(_), do: {:error, :not_running}
 
   def commands_path(id), do: Path.join(QemuAdmin.Paths.vm_dir(id), "commands.log")
@@ -184,8 +210,9 @@ defmodule QemuAdmin.VmServer do
         |> String.split(~r/\R/, trim: true)
         |> Enum.flat_map(fn line ->
           case Jason.decode(line) do
-            {:ok, %{"seq" => seq, "at" => at, "dir" => dir, "text" => t}} ->
-              [%{seq: seq, at: at, dir: dir, text: t}]
+            {:ok, %{"seq" => seq, "at" => at, "dir" => dir, "text" => t} = e} ->
+              extra = for k <- ~w(x src via), is_map_key(e, k), into: %{}, do: {String.to_existing_atom(k), e[k]}
+              [Map.merge(%{seq: seq, at: at, dir: dir, text: t}, extra)]
 
             _ ->
               []
@@ -283,6 +310,11 @@ defmodule QemuAdmin.VmServer do
       qmp_buf: "",
       next_id: 1,
       pending: %{},
+      # QMP id → the history entry (x) a user's command opened, for its answer
+      xs: %{},
+      # the last command's x and when it was sent: the events right after are its
+      last_x: nil,
+      last_x_at: 0,
       screen_rev: 0,
       board?: board?,
       gdb?: is_integer(Map.get(ports, :gdb)),
@@ -310,14 +342,20 @@ defmodule QemuAdmin.VmServer do
   end
 
   @impl true
-  def handle_call({:qmp, _cmd, _args}, _from, %{qmp_ready: false} = state) do
+  def handle_call({:qmp, cmd, _args, meta}, _from, %{qmp_ready: false} = state) do
     msg = "QMP ainda não conectado"
-    {:reply, {:error, msg}, log_cmd(state, "error", msg)}
+    {state, x} = begin_exchange(state, meta, cmd, "QMP")
+    {:reply, {:error, msg}, log_cmd(state, "error", msg, %{x: x})}
   end
 
   # with the gdbstub attached, it holds and releases the CPUs
-  def handle_call({:qmp, cmd, _args}, _from, %{gdb?: true} = state)
+  def handle_call({:qmp, cmd, _args, meta}, _from, %{gdb?: true} = state)
       when cmd in ["stop", "cont"] do
+    {state, x} = begin_exchange(state, meta, cmd, "gdbstub")
+
+    state =
+      log_cmd(state, "sent", "(gdbstub) #{if cmd == "stop", do: "interromper a CPU", else: "continuar a CPU"}: não passa pelo QMP", %{x: x})
+
     result =
       if cmd == "stop",
         do: QemuAdmin.Gpio.pause(state.vm.id),
@@ -332,29 +370,31 @@ defmodule QemuAdmin.VmServer do
     {:reply, result, state}
   end
 
-  def handle_call({:qmp, cmd, args}, from, state) do
+  def handle_call({:qmp, cmd, args, meta}, from, state) do
     # A board has no ACPI: its power button is the plug.
     cmd = if cmd == "system_powerdown" and state.board?, do: "quit", else: cmd
     state = if cmd == "quit" or cmd == "system_powerdown", do: stopping(state, cmd), else: state
-    msg = if args == %{}, do: %{execute: cmd}, else: %{execute: cmd, arguments: args}
-    state = log_cmd(state, "sent", Jason.encode!(msg))
-    {:noreply, send_qmp(state, cmd, args, from)}
+    {state, x} = begin_exchange(state, meta, cmd, "QMP")
+    {:noreply, send_qmp(state, cmd, args, from, x)}
   end
 
-  def handle_call({:hmp, line}, _from, %{qmp_ready: false} = state) do
+  def handle_call({:hmp, line, meta}, _from, %{qmp_ready: false} = state) do
     msg = "QMP ainda não conectado"
-    {:reply, {:error, msg}, state |> log_cmd("hmp", line) |> log_cmd("error", msg)}
+    {state, x} = begin_exchange(state, Map.put_new(meta, :label, line), line, "monitor (HMP)")
+    {:reply, {:error, msg}, log_cmd(state, "error", msg, %{x: x})}
   end
 
-  def handle_call({:hmp, line}, from, state) do
-    state = log_cmd(state, "hmp", line)
-    {:noreply, send_qmp(state, "human-monitor-command", %{"command-line" => line}, from)}
+  def handle_call({:hmp, line, meta}, from, state) do
+    {state, x} = begin_exchange(state, Map.put_new(meta, :label, line), line, "monitor (HMP)")
+    {:noreply, send_qmp(state, "human-monitor-command", %{"command-line" => line}, from, x)}
   end
 
   def handle_call(:commands, _from, state), do: {:reply, :queue.to_list(state.cmds), state}
 
-  def handle_call({:log_cmd, dir, text}, _from, state),
-    do: {:reply, :ok, log_cmd(state, dir, text)}
+  def handle_call({:log_cmd, dir, text, meta}, _from, state) do
+    state = log_cmd(state, dir, text, meta)
+    {:reply, {:ok, state.cmd_seq}, state}
+  end
 
   def handle_call(:log, _from, state), do: {:reply, :queue.to_list(state.log), state}
   def handle_call(:command_line, _from, state), do: {:reply, state.command, state}
@@ -545,26 +585,49 @@ defmodule QemuAdmin.VmServer do
 
   # --------------------------------------------------------------- QMP
 
-  defp send_qmp(state, cmd, args, from) do
+  # `x`: the history entry of the user's command this is (nil for the app's own
+  # chatter — the handshake, the status, the screen — which is not logged).
+  # What is logged is the line that goes down the socket, `id` and all.
+  defp send_qmp(state, cmd, args, from, x \\ nil) do
     id = state.next_id
     msg = %{execute: cmd, id: id}
     msg = if args == %{}, do: msg, else: Map.put(msg, :arguments, args)
-    :gen_tcp.send(state.qmp, [Jason.encode_to_iodata!(msg), "\r\n"])
-    %{state | next_id: id + 1, pending: Map.put(state.pending, id, from)}
+    wire = Jason.encode!(msg)
+    :gen_tcp.send(state.qmp, [wire, "\r\n"])
+    state = if x, do: log_cmd(state, "sent", wire, %{x: x}), else: state
+    xs = if x, do: Map.put(state.xs, id, x), else: state.xs
+    %{state | next_id: id + 1, pending: Map.put(state.pending, id, from), xs: xs}
+  end
+
+  # A user's command opens an entry of the history (a `"cmd"` line: what the user
+  # sees, where it came from, how it reaches QEMU) that its wire message, answer
+  # and events hang from. `{state, x}`; x is nil when the command is `silent`.
+  defp begin_exchange(state, %{silent: true}, _label, _via), do: {state, nil}
+
+  defp begin_exchange(state, meta, label, via) do
+    x = state.cmd_seq + 1
+    head = %{x: x, src: meta[:src] || "app", via: meta[:via] || via}
+    state = log_cmd(state, "cmd", meta[:label] || label, head)
+    {%{state | last_x: x, last_x_at: System.monotonic_time(:millisecond)}, x}
   end
 
   defp qmp_message(state, %{"QMP" => _greeting}) do
     send_qmp(state, "qmp_capabilities", %{}, :capabilities)
   end
 
-  defp qmp_message(state, %{"return" => ret, "id" => id}) do
+  defp qmp_message(state, %{"return" => ret, "id" => id} = msg) do
     {from, pending} = Map.pop(state.pending, id)
-    reply(%{state | pending: pending}, from, {:ok, ret})
+    {x, xs} = Map.pop(state.xs, id)
+    state = %{state | pending: pending, xs: xs}
+    if is_tuple(from), do: reply_user(state, from, {:ok, ret}, x, msg), else: reply(state, from, {:ok, ret})
   end
 
-  defp qmp_message(state, %{"error" => err, "id" => id}) do
+  defp qmp_message(state, %{"error" => err, "id" => id} = msg) do
     {from, pending} = Map.pop(state.pending, id)
-    reply(%{state | pending: pending}, from, {:error, err["desc"] || inspect(err)})
+    {x, xs} = Map.pop(state.xs, id)
+    state = %{state | pending: pending, xs: xs}
+    result = {:error, err["desc"] || inspect(err)}
+    if is_tuple(from), do: reply_user(state, from, result, x, msg), else: reply(state, from, result)
   end
 
   defp qmp_message(state, %{"event" => event} = msg) do
@@ -572,7 +635,7 @@ defmodule QemuAdmin.VmServer do
     state =
       if state.gdb? and event in ["STOP", "RESUME"],
         do: state,
-        else: log_cmd(state, "event", event_text(msg))
+        else: log_cmd(state, "event", event_text(msg), %{x: recent_x(state)})
 
     qmp_event(state, event, msg)
   end
@@ -598,17 +661,40 @@ defmodule QemuAdmin.VmServer do
     state
   end
 
-  defp reply(state, from, result) when is_tuple(from) do
+  defp reply(state, _internal, _result), do: state
+
+  # The answer to a user's command goes to the history under its entry: the
+  # whole message QEMU sent for a QMP command, the monitor's text for a
+  # monitor one (QMP carries it as a string).
+  defp reply_user(state, from, result, nil, _msg) do
     GenServer.reply(from, result)
+    state
+  end
+
+  defp reply_user(state, from, result, x, msg) do
+    GenServer.reply(from, result)
+    meta = %{x: x}
 
     case result do
-      {:ok, text} when is_binary(text) -> log_cmd(state, "received", String.trim_trailing(text))
-      {:ok, ret} -> log_cmd(state, "received", Jason.encode!(%{return: ret}))
-      {:error, msg} -> log_cmd(state, "error", to_string(msg))
+      {:ok, text} when is_binary(text) ->
+        log_cmd(state, "received", String.trim_trailing(text), meta)
+
+      {:ok, _ret} ->
+        log_cmd(state, "received", Jason.encode!(msg), meta)
+
+      {:error, desc} ->
+        state
+        |> log_cmd("received", Jason.encode!(msg), meta)
+        |> log_cmd("error", to_string(desc), meta)
     end
   end
 
-  defp reply(state, _internal, _result), do: state
+  # events within 1.5 s of a command belong to it (STOP after `stop`…)
+  defp recent_x(%{last_x: x, last_x_at: at}) when is_integer(x) do
+    if System.monotonic_time(:millisecond) - at <= 1_500, do: x
+  end
+
+  defp recent_x(_state), do: nil
 
   defp qmp_event(%{gdb?: true} = state, event, _) when event in ["STOP", "RESUME"], do: state
 
@@ -658,10 +744,14 @@ defmodule QemuAdmin.VmServer do
 
   # One entry of the command history: kept (the last @cmd_keep), written to
   # commands.log and broadcast. `text` may be long and have lines (an HMP answer).
-  defp log_cmd(state, dir, text) do
+  defp log_cmd(state, dir, text, meta \\ %{}) do
     seq = state.cmd_seq + 1
     at = DateTime.utc_now() |> DateTime.truncate(:second) |> DateTime.to_iso8601()
-    entry = %{seq: seq, at: at, dir: dir, text: utf8(text)}
+
+    entry =
+      %{seq: seq, at: at, dir: dir, text: utf8(text)}
+      |> Map.merge(for {k, v} <- meta, k in [:x, :src, :via], v != nil, into: %{}, do: {k, v})
+      |> then(&if dir == "cmd", do: Map.put_new(&1, :x, seq), else: &1)
     IO.binwrite(state.cmd_io, [Jason.encode_to_iodata!(entry), "\n"])
     broadcast({:vm_cmd, state.vm.id, entry})
 
