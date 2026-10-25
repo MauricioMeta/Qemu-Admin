@@ -151,8 +151,9 @@ defmodule QemuAdmin.VmServer do
 
     board = Vm.board(vm)
 
+    # a board whose pins are not followed (`io: nil`, the Cortex-M ones) has no tracker
     gpio =
-      if board do
+      if board && board.io do
         {:ok, pid} =
           QemuAdmin.Gpio.start_link(%{vm: vm, board: board, ports: ports, server: self()})
 

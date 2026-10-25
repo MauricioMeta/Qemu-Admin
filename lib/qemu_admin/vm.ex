@@ -22,10 +22,13 @@ defmodule QemuAdmin.Vm do
     * a **Raspberry Pi** (`raspi*` machines of `aarch64` and `arm`): a
       kernel, its device tree and command line (`kernel`, `dtb`, `append`,
       taken from the SD card image when it is imported) and the SD card as
-      its one disk (raw, `interface` `sd`); its memory is the board's.
+      its one disk (raw, `interface` `sd`); its memory is the board's;
+    * a **Cortex-M board** (`cortexm`: the STM32 ones, as the Netduino Plus
+      2): its program, `firmware.elf` or `firmware.bin` in the VM's folder,
+      is loaded with `-kernel`; no disk, no network, no screen.
 
-  The ESP32 and the Arduino are microcontrollers (`mcu?/1`): their console
-  is the UART. A Raspberry Pi has a screen and a UART (`serial?/1`).
+  The ESP32, the Arduino and the Cortex-M boards are microcontrollers
+  (`mcu?/1`): their console is the UART. A Raspberry Pi has a screen and a UART (`serial?/1`).
   `firmware` and `app` remember what was last written (AtomVM's version,
   the `.avm`, the Arduino's program), for the page. What a PC has and a
   board has not — CD, UEFI, video card, a choice of accelerator — is fixed
@@ -69,7 +72,7 @@ defmodule QemuAdmin.Vm do
     "x86_64" => ~w(q35 pc microvm),
     "i386" => ~w(pc q35 isapc),
     "aarch64" => ~w(virt sbsa-ref raspi3b raspi3ap raspi4b),
-    "arm" => ~w(raspi2b raspi0),
+    "arm" => ~w(raspi2b raspi0 netduinoplus2),
     "xtensa" => ~w(esp32 esp32s3),
     "avr" => ~w(arduino-uno arduino-mega-2560-v3 arduino-mega)
   }
@@ -77,16 +80,23 @@ defmodule QemuAdmin.Vm do
   def machines(arch), do: Map.get(@machines, arch, [])
   def default_machine(arch), do: arch |> machines() |> List.first()
 
-  @doc "`:pc`, `:esp32`, `:avr` (an Arduino) or `:raspi`."
+  # the Cortex-M machines of `qemu-system-arm` the app configures
+  @cortexm ~w(netduinoplus2)
+
+  @doc "The Cortex-M (STM32) machines the app configures."
+  def cortexm_machines, do: @cortexm
+
+  @doc "`:pc`, `:esp32`, `:avr` (an Arduino), `:cortexm` or `:raspi`."
   def kind(%__MODULE__{arch: arch, machine: machine}), do: kind(arch, machine)
 
   def kind("xtensa", _machine), do: :esp32
   def kind("avr", _machine), do: :avr
+  def kind("arm", machine) when machine in @cortexm, do: :cortexm
   def kind(_arch, "raspi" <> _), do: :raspi
   def kind(_arch, _machine), do: :pc
 
-  @doc "Whether the VM (or architecture) is a microcontroller — an ESP32 or an Arduino."
-  def mcu?(%__MODULE__{arch: arch}), do: mcu?(arch)
+  @doc "Whether the VM (or architecture) is a microcontroller — an ESP32, an Arduino or a Cortex-M board."
+  def mcu?(%__MODULE__{} = vm), do: kind(vm) in [:esp32, :avr, :cortexm]
   def mcu?(arch), do: arch in ["xtensa", "avr"]
 
   @doc "Whether the VM has a UART the page shows (every board)."
@@ -98,6 +108,7 @@ defmodule QemuAdmin.Vm do
   @doc "The defaults a VM takes when it changes kind (MiB of PSRAM are not MiB of RAM)."
   def kind_defaults(:esp32, _machine), do: %{memory: 4, cpus: 2, net_model: "open_eth"}
   def kind_defaults(:avr, _machine), do: %{memory: 0, cpus: 1, net_model: "none"}
+  def kind_defaults(:cortexm, _machine), do: %{memory: 0, cpus: 1, net_model: "none"}
 
   def kind_defaults(:raspi, machine) do
     %{memory: QemuAdmin.Board.for_machine(machine).memory, cpus: 4, net_model: "usb-net"}
@@ -219,6 +230,7 @@ defmodule QemuAdmin.Vm do
       case kind(vm) do
         :esp32 -> as_esp32(vm, Map.has_key?(params, "memory"))
         :avr -> as_avr(vm)
+        :cortexm -> as_cortexm(vm)
         :raspi -> as_raspi(vm)
         :pc -> vm
       end
@@ -253,6 +265,10 @@ defmodule QemuAdmin.Vm do
         disks: Enum.map(vm.disks, &%{&1 | "format" => "raw", "interface" => "mtd"})
     }
   end
+
+  # A Cortex-M board is its program and its UART, like an Arduino: no disk, no
+  # network (the Netduino Plus 2's Ethernet is not modelled by QEMU).
+  defp as_cortexm(vm), do: as_avr(vm)
 
   # An Arduino is its program and its UART: no disk, no network.
   defp as_avr(vm) do

@@ -45,6 +45,7 @@ defmodule QemuAdminWeb.AdminLive do
   }
 
   alias QemuAdmin.Avr.Firmware, as: AvrFirmware
+  alias QemuAdmin.CortexM.Firmware, as: CortexMFw
   alias QemuAdmin.Esp32.AtomVM
   alias QemuAdmin.Raspi.Image, as: RaspiImage
   alias QemuAdmin.Esp32.Flash, as: EspFlash
@@ -70,6 +71,7 @@ defmodule QemuAdminWeb.AdminLive do
 
   alias QemuAdminWeb.Components.Vm.{
     Console,
+    CortexFirmware,
     Firmware,
     Flash,
     Form,
@@ -110,6 +112,13 @@ defmodule QemuAdminWeb.AdminLive do
       @overview,
       {"console", "Serial", "hero-command-line"},
       @board_view,
+      {"firmware", "Firmware", "hero-cpu-chip"},
+      @config,
+      @log
+    ],
+    cortexm: [
+      @overview,
+      {"console", "Serial", "hero-command-line"},
       {"firmware", "Firmware", "hero-cpu-chip"},
       @config,
       @log
@@ -566,10 +575,13 @@ defmodule QemuAdminWeb.AdminLive do
     {:noreply, socket}
   end
 
-  def handle_event("avr_erase", _params, socket) do
+  def handle_event(event, _params, socket) when event in ["avr_erase", "cortexm_erase"] do
     with {vm, rt} <- current(socket),
          true <- stopped?(rt) || {:error, "Desligue a placa antes de apagar"} do
-      AvrFirmware.erase(Vm.dir(vm))
+      if Vm.kind(vm) == :cortexm,
+        do: CortexMFw.erase(Vm.dir(vm)),
+        else: AvrFirmware.erase(Vm.dir(vm))
+
       VmStore.save(%{vm | firmware: "", app: ""})
       {:noreply, socket |> load_vms() |> put_flash(:info, "Programa apagado")}
     else
@@ -1059,7 +1071,7 @@ defmodule QemuAdminWeb.AdminLive do
   # Raspberry Pi's SD card (imported in the background: it is a big copy).
   defp after_create(socket, vm, params) do
     case {Vm.kind(vm), params} do
-      {:avr, %{"firmware_src" => src}} when src != "" ->
+      {kind, %{"firmware_src" => src}} when kind in [:avr, :cortexm] and src != "" ->
         firmware_write(socket, vm, src)
 
       {:raspi, %{"sd_image" => src}} when src != "" ->
@@ -1077,7 +1089,12 @@ defmodule QemuAdminWeb.AdminLive do
   end
 
   defp firmware_write(socket, vm, src) do
-    case AvrFirmware.install(Vm.dir(vm), src, vm.machine) do
+    result =
+      if Vm.kind(vm) == :cortexm,
+        do: CortexMFw.install(Vm.dir(vm), src),
+        else: AvrFirmware.install(Vm.dir(vm), src, vm.machine)
+
+    case result do
       :ok ->
         VmStore.save(%{vm | firmware: Path.basename(src), app: src})
         socket |> load_vms() |> put_flash(:info, "#{Path.basename(src)} gravado na flash")
@@ -1301,7 +1318,9 @@ defmodule QemuAdminWeb.AdminLive do
         "disk:" <> i -> get_in(socket.assigns.params, ["disks", i, "path"])
         "cdrom_live" -> with({vm, _} <- current(socket), do: Vm.resolve(vm, vm.cdrom))
         "flash_app:" <> _ -> with({vm, _} <- current(socket), do: vm.app)
-        "avr_firmware" -> with({vm, _} <- current(socket), do: vm.app)
+        target when target in ["avr_firmware", "cortexm_firmware"] ->
+          with({vm, _} <- current(socket), do: vm.app)
+
         "workspace" -> Workspace.current()
         _ -> nil
       end
@@ -1385,7 +1404,7 @@ defmodule QemuAdminWeb.AdminLive do
             put_flash(socket, :error, "#{path}: #{:file.format_error(r)}")
         end
 
-      "avr_firmware" ->
+      target when target in ["avr_firmware", "cortexm_firmware"] ->
         with {vm, rt} <- current(socket),
              true <- stopped?(rt) || {:error, "Desligue a placa antes de gravar"} do
           firmware_write(socket, vm, path)
@@ -1754,7 +1773,11 @@ defmodule QemuAdminWeb.AdminLive do
       {#match "io"}
         <Io vm={@vm} rt={@rt} board={Vm.board(@vm)} gpio={@gpio} />
       {#match "firmware"}
-        <Firmware vm={@vm} rt={@rt} file={Args.avr_firmware(@vm)} />
+        {#if Vm.kind(@vm) == :cortexm}
+          <CortexFirmware vm={@vm} rt={@rt} file={Args.cortexm_firmware(@vm)} />
+        {#else}
+          <Firmware vm={@vm} rt={@rt} file={Args.avr_firmware(@vm)} />
+        {/if}
       {#match "sd"}
         <SdCard vm={@vm} rt={@rt} board={Vm.board(@vm)} import={@sd_import} user={@sd_user} />
       {#match "flash"}

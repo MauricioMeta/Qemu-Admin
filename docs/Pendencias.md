@@ -13,7 +13,7 @@ Nada foi implementado em 2026-10-25 além do que está em [[Estado do Projeto]];
 - [ ] **Refazer o instalador Tauri** — o NSIS é anterior às mudanças de código. Rodar `mix desktop.build`. Ver [[Build Desktop Tauri]].
 
 ## Novas (2026-10-25)
-- [ ] **Suporte a microcontroladores Cortex-M / STM32** — o app não lista as máquinas STM32 do QEMU. Ver [[STM32 e Cortex-M]].
+- [x] **Suporte a Cortex-M / STM32** — feito para o `netduinoplus2` (Nova VM, Serial, Firmware). Faltam as outras máquinas, GPIO e um teste com firmware real. Ver [[STM32 e Cortex-M]].
 - [ ] **RTOS nas placas** — RTEMS não existe para ESP32 Xtensa; ver [[RTOS e imagens de firmware]].
 - [ ] **Pi mais leve** — testar `raspi0` (ARM1176, 32 bits) com imagem armhf. Ver [[Raspberry Pi 32 bits e desktop]].
 - [ ] **Desktop gráfico para o Pi** — depende da rede do Pi. Ver [[Raspberry Pi 32 bits e desktop]].

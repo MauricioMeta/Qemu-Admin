@@ -129,6 +129,18 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
           {row(%{label: "Serial", value: "USART0 → aba Serial"})}
         </section>
 
+        <section :if={Vm.kind(@vm) == :cortexm} class="qa-card p-4">
+          <h3 class="qa-label mb-2">Placa</h3>
+          {row(%{label: "Placa", value: Vm.board(@vm).name})}
+          {row(%{label: "Chip", value: Vm.board(@vm).chip})}
+          {row(%{
+            label: "Programa",
+            value: if(@vm.firmware in [nil, ""], do: "flash vazia", else: @vm.firmware)
+          })}
+          {row(%{label: "Emulador", value: "qemu-system-arm · #{@vm.machine} (TCG)"})}
+          {row(%{label: "Serial", value: "USART1 → aba Serial"})}
+        </section>
+
         <section :if={Vm.kind(@vm) == :raspi} class="qa-card p-4">
           <h3 class="qa-label mb-2">Placa</h3>
           {row(%{label: "Placa", value: Vm.board(@vm).name})}
@@ -172,7 +184,7 @@ defmodule QemuAdminWeb.Components.Vm.Overview do
         </section>
       </div>
 
-      <section :if={Vm.kind(@vm) != :avr} class="qa-card mt-4 p-4">
+      <section :if={Vm.kind(@vm) not in [:avr, :cortexm]} class="qa-card mt-4 p-4">
         <h3 class="qa-label mb-2">{case Vm.kind(@vm) do
             :esp32 -> "Flash SPI"
             :raspi -> "Cartão SD"

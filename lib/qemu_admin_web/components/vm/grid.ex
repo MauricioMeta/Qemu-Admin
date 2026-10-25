@@ -50,7 +50,7 @@ defmodule QemuAdminWeb.Components.Vm.Grid do
               class="relative block aspect-[4/3] w-full overflow-hidden border-b border-primary/10"
               title={"Abrir #{vm.name}"}
             >
-              {#if Vm.mcu?(vm) or (Vm.board(vm) && is_nil(screen_url(vm, rt)))}
+              {#if Vm.kind(vm) in [:esp32, :avr] or (Vm.kind(vm) == :raspi and is_nil(screen_url(vm, rt)))}
                 <div class={"qa-screen grid size-full place-items-center bg-base-300/40 p-3", "opacity-50": stopped?(rt)}>
                   <QemuAdminWeb.Components.Vm.Board board={Vm.board(vm)} compact on={not stopped?(rt)} />
                 </div>

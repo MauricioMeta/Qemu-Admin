@@ -49,6 +49,7 @@ defmodule QemuAdminWeb.Components.Vm.Form do
     {"esp32s3", "ESP32-S3", "hero-cpu-chip"},
     {"arduino-uno", "Arduino Uno", "hero-cpu-chip"},
     {"arduino-mega-2560-v3", "Arduino Mega", "hero-cpu-chip"},
+    {"netduinoplus2", "Netduino Plus 2 (STM32)", "hero-cpu-chip"},
     {"raspi3b", "Raspberry Pi 3", "hero-server"},
     {"raspi4b", "Raspberry Pi 4", "hero-server"},
     {"raspi0", "Raspberry Pi Zero", "hero-server"}
@@ -254,6 +255,9 @@ defmodule QemuAdminWeb.Components.Vm.Form do
           </p>
           <p :if={kind(@params) == :avr} class="text-[0.68rem] text-base-content/50">
             Emulado pelo qemu-system-avr. O sketch compilado (.hex) vai para a flash na aba Firmware, depois de criar.
+          </p>
+          <p :if={kind(@params) == :cortexm} class="text-[0.68rem] text-base-content/50">
+            Emulado pelo qemu-system-arm (sempre TCG). O firmware (.elf, .bin ou .hex) vai para a flash na aba Firmware, depois de criar.
           </p>
           <p :if={kind(@params) == :raspi} class="text-[0.68rem] text-base-content/50">
             Emulado pelo QEMU (sempre TCG): o kernel e o device tree saem da imagem do cartão SD.
@@ -490,7 +494,7 @@ defmodule QemuAdminWeb.Components.Vm.Form do
         </section>
 
         <!-- Rede -->
-        <section :if={kind(@params) != :avr} class="qa-card space-y-3 p-4">
+        <section :if={kind(@params) not in [:avr, :cortexm]} class="qa-card space-y-3 p-4">
           <h3 class="qa-label text-primary">Rede</h3>
           <div class="grid grid-cols-2 gap-3">
             <div>

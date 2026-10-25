@@ -1,24 +1,28 @@
 ---
-tags: [qemu-admin, placas, stm32, pendencia]
+tags: [qemu-admin, placas, stm32]
 atualizado: 2026-10-25
 ---
-# STM32 e Cortex-M (não suportado ainda)
+# STM32 e Cortex-M
 
-## O que o QEMU 11.1 do app oferece (`qemu-system-arm -M help`)
-`netduino2` (Cortex-M3), `netduinoplus2` (M4, STM32F405), `olimex-stm32-h405` (M4), `stm32vldiscovery` (M3), `b-l475e-iot01a` (M4, STM32L4), além de `microbit` e as `mps2-*`/`mps3-*`.
+## Estado (2026-10-25)
+**Netduino Plus 2** (`netduinoplus2`, STM32F405, Cortex-M4) é uma placa do app: aparece em **Nova VM** ("Netduino Plus 2 (STM32)") e tem as abas **Visão geral · Serial · Firmware · Configuração · Log**.
 
-## Por que o app não lista
-1. A lista de máquinas é fixa em `QemuAdmin.Vm` (`@machines`, ~linha 68). Para `arm` só existem `raspi2b` e `raspi0`.
-2. Falta um caminho em `Vm.Args` para Cortex-M: sem disco/CD/rede/tela; carrega `.elf`/`.bin` com `-kernel`, serial e `-nographic`.
+- Tipo `:cortexm` em `QemuAdmin.Vm` (arquitetura `arm`); catálogo em `QemuAdmin.Board` (sem desenho e sem pinos: `headers: []`, `io: nil`).
+- Linha de comando (`Vm.Args.build_cortexm/2`): `-machine netduinoplus2 -kernel <firmware> -display none -serial tcp:…,wait=on -qmp …`. Sem `-S/-gdb`, sem disco, sem rede (o QEMU não modela a Ethernet da placa), TCG.
+- O primeiro `-serial` é a **USART1**, que vira a aba Serial.
+- Firmware (`QemuAdmin.CortexM.Firmware`): `.elf` (mantido), `.bin` cru (carregado no início da flash) ou `.hex` (vira `.bin` a partir do menor endereço; a flash do STM32 fica em `0x08000000`). Fica na pasta da VM como `firmware.elf` / `firmware.bin`. Só com a placa desligada.
+- O rastreador de GPIO (`QemuAdmin.Gpio`) só sobe para placas com `io` (`VmServer`).
 
-## Feito
-- A página **QEMU** lista todas as máquinas de cada emulador (`Qemu.machines/1`, lê `-machine help`), marcando as que o app configura. Só leitura: elas ainda não aparecem em "Nova VM".
+## Testado
+- Testes: `test/qemu_admin/cortexm_test.exs` (catálogo, VM, linha de comando, firmware, e um com QEMU real: um programa em Thumb escreve `hello from stm32` na USART1 e o texto chega na serial).
+- Na interface: criar a VM pelo preset, gravar `.bin` pelo seletor, ligar e ver o texto na aba Serial. A VM de demonstração ficou em `Workspace_Qemu/vms/netduino-stm32`.
+- **Não testado** com firmware de verdade (Zephyr, FreeRTOS, RTEMS): o programa de teste foi montado à mão.
 
-## Plano (quando for implementado)
-- [ ] Máquinas Cortex-M na lista de `arm` (ou ler `-M help` do QEMU).
-- [ ] Novo tipo de placa em `QemuAdmin.Board` com abas Serial + Firmware (modelo: [[Arduino]]).
-- [ ] Montador de argumentos para Cortex-M.
-- [ ] (Grande) GPIO e desenho da placa — ver [[GPIO e aba Placa]].
-- Começar por `netduinoplus2`; o BSP `stm32f4` do RTEMS mira a mesma família (não confirmado qual BSP roda em qual máquina).
+## O que o QEMU 11.1 oferece (`qemu-system-arm -M help`)
+`netduino2` (M3), `netduinoplus2` (M4), `olimex-stm32-h405` (M4), `stm32vldiscovery` (M3), `b-l475e-iot01a` (M4, STM32L4), além de `microbit` e as `mps2-*`/`mps3-*`. A página QEMU do app lista todas as máquinas de cada emulador.
 
-Ver também [[RTOS e imagens de firmware]].
+## Pendente
+- [ ] As outras máquinas Cortex-M: acrescentar a `@cortexm` em `Vm` e uma entrada em `Board` (`cortexm/3`). Cada uma pode ter a UART em outro `-serial` (confirmar).
+- [ ] GPIO e desenho da placa (hoje só a serial) — ver [[GPIO e aba Placa]].
+- [ ] Testar com um firmware real. Ver [[RTOS e imagens de firmware]] (sem imagens prontas de RTEMS; Zephyr/FreeRTOS são alternativas).
+- [ ] A biblioteca de Imagens trata `.elf`/`.hex` como firmware de Arduino; não oferece "Nova VM STM32".

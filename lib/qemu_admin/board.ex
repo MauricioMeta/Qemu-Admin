@@ -561,8 +561,28 @@ defmodule QemuAdmin.Board do
         dtb: "bcm2708-rpi-zero.dtb",
         uart: "ttyAMA0",
         zero: true
-      )
+      ),
+      cortexm("netduinoplus2", "Netduino Plus 2", "STM32F405 (Cortex-M4, 168 MHz)")
     ]
+  end
+
+  # A Cortex-M board: nothing drawn (`headers: []`) and no pins followed
+  # (`io: nil`) yet — its views are the Serial and the Firmware.
+  defp cortexm(id, name, chip) do
+    %{
+      id: id,
+      machine: id,
+      arch: "arm",
+      kind: :cortexm,
+      io: nil,
+      name: name,
+      chip: chip,
+      size: {320, 200},
+      body: nil,
+      parts: [],
+      leds: [],
+      headers: []
+    }
   end
 
   @doc "The board QEMU's `machine` emulates, or nil (a PC)."

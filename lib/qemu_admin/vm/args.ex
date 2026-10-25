@@ -29,6 +29,8 @@ defmodule QemuAdmin.Vm.Args do
     * an **ESP32** (`build_esp32/2`): the chip as the board, the SPI flash as
       an `mtd` drive, the OpenCores Ethernet MAC Espressif added;
     * an **Arduino** (`build_avr/2`): the program as the flash (`-bios`);
+    * a **Cortex-M board** (`build_cortexm/2`): the program as the kernel
+      (`-kernel`), USART1 on the UART socket;
     * a **Raspberry Pi** (`build_raspi/2`): the kernel and device tree from
       the SD card, the card itself, and USB keyboard, tablet and network on
       the boards QEMU gives USB.
@@ -47,6 +49,7 @@ defmodule QemuAdmin.Vm.Args do
     case Vm.kind(vm) do
       :esp32 -> build_esp32(vm, ports)
       :avr -> build_avr(vm, ports)
+      :cortexm -> build_cortexm(vm, ports)
       :raspi -> build_raspi(vm, ports)
       :pc -> build_pc(vm, ports, host)
     end
@@ -93,6 +96,27 @@ defmodule QemuAdmin.Vm.Args do
     ~w(firmware.elf firmware.bin)
     |> Enum.map(&Path.join(Vm.dir(vm), &1))
     |> Enum.find(&File.regular?/1)
+  end
+
+  @doc "A Cortex-M board's program in its folder: `firmware.elf` or `firmware.bin`, or nil."
+  def cortexm_firmware(vm), do: avr_firmware(vm)
+
+  # QEMU's STM32 machines take the program with -kernel (an ELF, or a raw
+  # image loaded at the flash). The first -serial is USART1. No -S/-gdb: the
+  # pins are not followed (yet).
+  defp build_cortexm(vm, ports) do
+    List.flatten([
+      ["-name", "#{esc(vm.name)},process=qemu-admin-#{vm.id}"],
+      ["-machine", vm.machine],
+      case cortexm_firmware(vm) do
+        nil -> []
+        file -> ["-kernel", esc(file)]
+      end,
+      ["-display", "none"],
+      serial(ports),
+      ["-qmp", "tcp:127.0.0.1:#{ports.qmp},server=on,wait=off"],
+      extra(vm)
+    ])
   end
 
   defp build_avr(vm, ports) do

@@ -57,9 +57,10 @@ defmodule QemuAdmin.Avr.Firmware do
   @doc """
   An Intel HEX file as the flash image from address 0, gaps filled with
   0xFF (erased flash). Records 00 (data), 01 (end), 02 and 04 (segment and
-  linear base) are understood; checksums are checked.
+  linear base) are understood; checksums are checked. With `:rebase` the
+  image starts at the lowest address instead of 0.
   """
-  def parse_hex(text) do
+  def parse_hex(text, mode \\ :from_zero) do
     text
     |> String.split(~r/\R/, trim: true)
     |> Enum.reduce_while({:ok, 0, []}, fn line, {:ok, base, chunks} ->
@@ -72,7 +73,7 @@ defmodule QemuAdmin.Avr.Firmware do
       end
     end)
     |> case do
-      {:ok, _base, chunks} -> {:ok, assemble(Enum.reverse(chunks))}
+      {:ok, _base, chunks} -> {:ok, chunks |> Enum.reverse() |> rebase(mode) |> assemble()}
       error -> error
     end
   end
@@ -100,6 +101,15 @@ defmodule QemuAdmin.Avr.Firmware do
 
   defp record(""), do: :skip
   defp record(_), do: {:error, "não é um arquivo Intel HEX"}
+
+  # `:rebase` starts the image at the lowest address, as a Cortex-M's flash
+  # (0x08000000 on the STM32) is loaded at its start
+  defp rebase(chunks, :rebase) when chunks != [] do
+    lowest = chunks |> Enum.map(&elem(&1, 0)) |> Enum.min()
+    Enum.map(chunks, fn {addr, data} -> {addr - lowest, data} end)
+  end
+
+  defp rebase(chunks, _mode), do: chunks
 
   defp assemble([]), do: ""
 
