@@ -11,6 +11,8 @@ defmodule QemuAdminWeb.Components.Vm.List do
   the play button next to it starts the VM with it, and "adicionar firmware…" copies
   a file into the VM's `firmware/` folder.
 
+  On a stopped VM's row, **Clonar** and **Excluir** show on hover (`clone_vm`, `delete_vm`).
+
   Events: `tree_toggle` (`id`), `pick_firmware` and `run_firmware` (`id`, `file`),
   `select_vm` (`id`), `new_vm`, `filter_vms` (`q`),
   `open_workspace` (`path`), `forget_workspace` (`path`), `picker_open`
@@ -197,7 +199,7 @@ defmodule QemuAdminWeb.Components.Vm.List do
           {#for {vm, rt, fws, open?} <- nodes(group, @open)}
               <div id={"vm-node-#{vm.id}"}>
                 <div class={
-                  "flex w-full items-center rounded-md transition-colors",
+                  "group flex w-full items-center rounded-md transition-colors",
                   "bg-primary/15 text-primary": vm.id == @selected,
                   "text-base-content/75 hover:bg-base-content/5 hover:text-base-content": vm.id != @selected
                 }>
@@ -227,6 +229,32 @@ defmodule QemuAdminWeb.Components.Vm.List do
                       </span>
                     </span>
                   </button>
+                  <div
+                    :if={rt.status == :stopped}
+                    class="mr-1 hidden shrink-0 items-center gap-0.5 group-hover:flex group-focus-within:flex"
+                  >
+                    <button
+                      type="button"
+                      id={"vm-clone-#{vm.id}"}
+                      phx-click="clone_vm"
+                      phx-value-id={vm.id}
+                      title="Clonar"
+                      class="grid size-6 place-items-center rounded text-base-content/55 hover:bg-base-300 hover:text-primary"
+                    >
+                      <.icon name="hero-document-duplicate" class="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      id={"vm-delete-#{vm.id}"}
+                      phx-click="delete_vm"
+                      phx-value-id={vm.id}
+                      data-confirm={"Excluir \"#{vm.name}\"? A pasta da VM, com os discos dentro dela, vai junto."}
+                      title="Excluir VM"
+                      class="grid size-6 place-items-center rounded text-error/70 hover:bg-error/10 hover:text-error"
+                    >
+                      <.icon name="hero-trash" class="size-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <ul :if={open?} id={"views-#{vm.id}"} class="mb-0.5 ml-6 border-l border-base-content/10 pl-1">
                   <li :for={{key, label, icon} <- Map.get(@views, vm.id, [])}>

@@ -65,6 +65,15 @@ defmodule QemuAdminWeb.Components.Vm.SerialConsole do
           <option value="none">sem fim</option>
         </select>
         <button
+          type="button"
+          id="serial-clear"
+          title="Limpar o terminal"
+          phx-click={Phoenix.LiveView.JS.dispatch("qa:serial-clear")}
+          class="grid size-7 shrink-0 place-items-center rounded border border-base-content/15 text-base-content/60 hover:bg-base-300 hover:text-primary"
+        >
+          <.icon name="hero-no-symbol" class="size-4" />
+        </button>
+        <button
           type="submit"
           disabled={stopped?(@rt)}
           class="rounded bg-primary px-3 py-1 text-xs font-semibold text-primary-content hover:brightness-110 disabled:opacity-40"

@@ -2234,53 +2234,6 @@ defmodule QemuAdminWeb.AdminLive do
 
     ~F"""
     <PageHeader>
-      <:buttons>
-        {#if (@vm_view == "console" and Vm.mcu?(@vm)) or @vm_view == "serial"}
-          <IconButton
-            id="serial-clear"
-            title="Limpar o terminal"
-            click={Phoenix.LiveView.JS.dispatch("qa:serial-clear")}
-            icon="hero-no-symbol"
-          />
-          <span class="mx-1 h-4 w-px bg-base-content/15" />
-        {/if}
-        {#if @vm_view == "console" and running?(@rt) and @vm.display == "vnc"}
-          <IconButton id="vnc-cad" title="Ctrl+Alt+Del" click={Phoenix.LiveView.JS.dispatch("qa:vnc-cad")}>
-            C-A-Del
-          </IconButton>
-          <IconButton
-            id="vnc-scale"
-            title="Ajustar à janela / tamanho real"
-            click={Phoenix.LiveView.JS.dispatch("qa:vnc-scale")}
-            icon="hero-arrows-pointing-in"
-          />
-          <IconButton
-            id="vnc-fullscreen"
-            title="Tela cheia"
-            click={Phoenix.LiveView.JS.dispatch("qa:vnc-fullscreen")}
-            icon="hero-arrows-pointing-out"
-          />
-          <span class="mx-1 h-4 w-px bg-base-content/15" />
-        {/if}
-        {#if stopped?(@rt)}
-          <IconButton
-            id="vm-clone"
-            title="Clonar"
-            click="clone_vm"
-            value={@vm.id}
-            icon="hero-document-duplicate"
-          />
-          <IconButton
-            id="vm-delete"
-            title="Excluir VM"
-            click="delete_vm"
-            value={@vm.id}
-            icon="hero-trash"
-            tone="error"
-            confirm={"Excluir \"#{@vm.name}\"? A pasta da VM, com os discos dentro dela, vai junto."}
-          />
-        {/if}
-      </:buttons>
       <:tabs>{tab_bar(assigns)}</:tabs>
       <:breadcrumb>
         {crumbs(

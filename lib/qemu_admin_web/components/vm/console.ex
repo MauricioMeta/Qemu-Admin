@@ -4,9 +4,9 @@ defmodule QemuAdminWeb.Components.Vm.Console do
   to QEMU's VNC WebSocket. With the VM off — or showing in its own SDL/GTK
   window, or headless — it says so instead.
 
-  The hook reconnects when `ws` changes (the VM was restarted). The page's
-  toolbar sends `qa:vnc-*` window events for Ctrl+Alt+Del, fullscreen and
-  scaling.
+  The hook reconnects when `ws` changes (the VM was restarted). Three buttons
+  over the screen's corner send the `qa:vnc-*` window events for Ctrl+Alt+Del,
+  scaling and fullscreen.
   """
 
   use Surface.Component
@@ -14,6 +14,7 @@ defmodule QemuAdminWeb.Components.Vm.Console do
   import QemuAdminWeb.CoreComponents, only: [icon: 1]
   import QemuAdminWeb.VmHelpers
 
+  alias Phoenix.LiveView.JS
   alias QemuAdmin.Vm
 
   prop vm, :struct, required: true
@@ -25,19 +26,48 @@ defmodule QemuAdminWeb.Components.Vm.Console do
   def render(assigns) do
     ~F"""
     {#if running?(@rt) and @vm.display == "vnc"}
-      <div
-        id={"vnc-console-#{@vm.id}"}
-        phx-hook="VncConsole"
-        phx-update="ignore"
-        data-ws-port={ws_port(@rt)}
-        class="qa-console relative min-h-0 flex-1 bg-black/60"
-      >
-        <div data-screen class="absolute inset-0" />
+      <div class="relative flex min-h-0 flex-1 flex-col">
         <div
-          data-status
-          class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-base-100/80 px-3 py-1.5 text-xs text-base-content/70"
+          id={"vnc-console-#{@vm.id}"}
+          phx-hook="VncConsole"
+          phx-update="ignore"
+          data-ws-port={ws_port(@rt)}
+          class="qa-console relative min-h-0 flex-1 bg-black/60"
         >
-          conectando…
+          <div data-screen class="absolute inset-0" />
+          <div
+            data-status
+            class="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded bg-base-100/80 px-3 py-1.5 text-xs text-base-content/70"
+          >
+            conectando…
+          </div>
+        </div>
+        <div id="vnc-tools" class="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-md border border-primary/20 bg-base-100/80 p-0.5 backdrop-blur">
+          <button
+            type="button"
+            id="vnc-cad"
+            title="Ctrl+Alt+Del"
+            phx-click={JS.dispatch("qa:vnc-cad")}
+            class="h-7 rounded px-2 font-mono text-[0.68rem] text-base-content/70 hover:bg-base-300 hover:text-primary"
+          >C-A-Del</button>
+          <button
+            type="button"
+            id="vnc-scale"
+            title="Ajustar à janela / tamanho real"
+            phx-click={JS.dispatch("qa:vnc-scale")}
+            class="grid size-7 place-items-center rounded text-base-content/70 hover:bg-base-300 hover:text-primary"
+          >
+            <.icon name="hero-arrows-pointing-in" class="size-4" />
+          </button>
+          <button
+            type="button"
+            id="vnc-fullscreen"
+            title="Tela cheia"
+            phx-click={JS.dispatch("qa:vnc-fullscreen")}
+            class="grid size-7 place-items-center rounded text-base-content/70 hover:bg-base-300 hover:text-primary"
+          >
+            <.icon name="hero-arrows-pointing-out" class="size-4" />
+          </button>
         </div>
       </div>
     {#else}

@@ -16,7 +16,7 @@ A lista de VMs é uma **árvore**: o motor (QEMU, Renode) → a VM → os seus *
 - **adicionar firmware…** copia um arquivo para `firmware/` da VM (pelo seletor de arquivos).
 - No QEMU, o programa de um Arduino ou de uma placa Cortex-M é o mesmo `program` (`Vm.Args.avr_firmware/1` → `Firmwares.path/1`).
 
-**As vistas da VM também estão na árvore:** ao abrir uma VM (seta ou clique) o nó mostra, em ordem, as suas vistas (Visão geral, Serial, Placa, Flash, Configuração, Log; as que a VM tem) e os Firmwares. A barra de vistas e o texto de estado (ligada/desligada) saíram da barra de cima: o estado é a bolinha da árvore e as vistas são os itens do nó. Escolher uma vista abre a VM nela.
+**As vistas da VM também estão na árvore:** ao abrir uma VM (seta ou clique) o nó mostra, em ordem, as suas vistas (Visão geral, Serial, Placa, Flash, Configuração, Log; as que a VM tem) e os Firmwares. A barra de vistas e o texto de estado (ligada/desligada) saíram da barra de cima: o estado é a bolinha da árvore e as vistas são os itens do nó. Escolher uma vista abre a VM nela. **Clonar** e **Excluir** ficam na linha da VM (aparecem ao passar o mouse, com a VM desligada). A página da VM não tem mais a barra de ferramentas: limpar a serial é o botão ao lado de Enviar, e Ctrl+Alt+Del, ajustar e tela cheia do VNC são três botões no canto da tela da VM.
 
 ## A aba Serial: enviar e ver a placa ao lado
 Vale para toda placa com UART.

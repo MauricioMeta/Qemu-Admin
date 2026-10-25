@@ -4,7 +4,7 @@ defmodule QemuAdminWeb.Components.App.PageHeader do
 
     1. the open VMs' tabs (`tabs`, `App.Tabs`), when there are any: the window's
        top line, which the rail's and the panel's headers line up with;
-    2. the toolbar (`--qa-bar`, 34 px) **under the tabs**: a title or the VM's
+    2. the toolbar (`--qa-bar`, 34 px) **under the tabs**, only when a slot has something for it (a VM's page has none): a title or the VM's
        power state at the left (`nav`), the page's view switch centred (`center`)
        and its controls at the right (`buttons`). With no tabs open it is the top
        line itself;
@@ -33,6 +33,7 @@ defmodule QemuAdminWeb.Components.App.PageHeader do
     <header id="page-header" class="shrink-0 text-xs">
       <#slot {@tabs} />
       <div
+        :if={slot_assigned?(:nav) or slot_assigned?(:center) or slot_assigned?(:buttons)}
         id="page-toolbar"
         class="grid h-[var(--qa-bar)] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 border-b border-primary/20 px-3"
       >
