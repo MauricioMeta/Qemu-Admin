@@ -11,4 +11,5 @@ Gerenciador local de VMs QEMU em Elixir/Phoenix LiveView, com a tela de cada VM 
 - [[Pendencias]] — lista de trabalho em aberto
 - Arquitetura: [[Visao Geral]] · [[Modulos]] · [[Como uma VM roda]]
 - Placas: [[ESP32 e AtomVM]] · [[Arduino]] · [[Raspberry Pi]] · [[GPIO e aba Placa]]
-- Operação: [[Desenvolvimento]] · [[Build Desktop Tauri]] · [[Testes]]
+- Pesquisa/pendências de placas: [[STM32 e Cortex-M]] · [[RTOS e imagens de firmware]] · [[Raspberry Pi 32 bits e desktop]]
+- Operação: [[Desenvolvimento]] · [[Build Desktop Tauri]] · [[Testes]] · [[Pacote RPi QEMU 2012]]

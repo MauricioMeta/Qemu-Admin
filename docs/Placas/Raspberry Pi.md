@@ -9,4 +9,6 @@ Modelos: 3 B, 3 A+, 4 B, 2 B, Zero. Aba **Cartão SD**: importa a imagem do Rasp
 - Teclado, mouse e rede por USB (`usb-net`); o Pi 4 do QEMU não tem USB.
 - Desligar corta a energia; use `sudo poweroff` no guest.
 
-**Pendente:** rede e login pela serial — ver [[Pendencias]].
+**Login:** `pi` / `raspberry` (padrão do formulário do Cartão SD, vira `userconf.txt`). Confirmado na aba **Tela** (tty1) em 2026-10-25; a imagem é a Lite (sem desktop). Ideias em [[Raspberry Pi 32 bits e desktop]].
+
+**Pendente:** rede (o guest fica em `169.254.x.x`) e login pela aba Serial — ver [[Pendencias]].
