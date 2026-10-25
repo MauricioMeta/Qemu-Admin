@@ -56,7 +56,7 @@ defmodule QemuAdminWeb.Components.Pages.Images do
     ~F"""
     <div id="images-page" class="min-h-0 flex-1 overflow-y-auto p-5">
       <section class="qa-card mb-4 flex items-center gap-3 p-4 text-xs">
-        <.icon name="hero-photo" class="size-8 shrink-0 text-primary/70" />
+        <.icon name="hero-disc" class="size-8 shrink-0 text-primary/70" />
         <div class="min-w-0 flex-1">
           <p class="font-semibold">Imagens do workspace</p>
           <p class="truncate text-base-content/50" title={@dir}>

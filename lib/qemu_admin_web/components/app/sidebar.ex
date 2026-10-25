@@ -30,7 +30,7 @@ defmodule QemuAdminWeb.Components.App.Sidebar do
   @items [
     %{icon: "hero-computer-desktop", label: "Máquinas virtuais", view: "vms"},
     %{icon: "hero-circle-stack", label: "Discos", view: "disks"},
-    %{icon: "hero-photo", label: "Imagens", view: "images"},
+    %{icon: "hero-disc", label: "Imagens", view: "images"},
     %{icon: "hero-cpu-chip", label: "QEMU", view: "qemu"}
   ]
 
