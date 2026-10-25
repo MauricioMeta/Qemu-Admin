@@ -8,6 +8,13 @@
 //   qa:vnc-cad        → Ctrl+Alt+Del
 //   qa:vnc-fullscreen → the console fills the screen
 //   qa:vnc-scale      → fit the window / native size
+//
+// noVNC fits the screen to its container when it connects and when the *window*
+// resizes, but not when the container alone changes size (the Terminal folded or
+// dragged, a view opened beside it): the screen then stays at the old scale, bigger
+// than the room it has, and its top and left rows end up cut off and out of the
+// pointer's reach. A ResizeObserver on the container sets `scaleViewport` again, which
+// makes noVNC fit it anew.
 
 import RFB from "@novnc/novnc"
 
@@ -31,6 +38,27 @@ export const VncConsole = {
     window.addEventListener("qa:vnc-cad", this.onCad)
     window.addEventListener("qa:vnc-fullscreen", this.onFullscreen)
     window.addEventListener("qa:vnc-scale", this.onScale)
+
+    // (a timer, not requestAnimationFrame: a hidden window does not run those)
+    this.refit = () => {
+      clearTimeout(this.fitTimer)
+      this.fitTimer = setTimeout(() => {
+        if (this.rfb) this.rfb.scaleViewport = this.rfb.scaleViewport
+      }, 30)
+    }
+    this.observer = new ResizeObserver(this.refit)
+    this.observer.observe(this.screen)
+    // and a look every so often, for where an observer is not delivered (a hidden or
+    // embedded window): cheap, a size read
+    this.lastSize = ""
+    this.sizeTimer = setInterval(() => {
+      const r = this.screen.getBoundingClientRect()
+      const size = `${Math.round(r.width)}x${Math.round(r.height)}`
+      if (size !== this.lastSize) {
+        this.lastSize = size
+        this.refit()
+      }
+    }, 400)
     this.connect()
   },
 
@@ -42,6 +70,9 @@ export const VncConsole = {
     window.removeEventListener("qa:vnc-cad", this.onCad)
     window.removeEventListener("qa:vnc-fullscreen", this.onFullscreen)
     window.removeEventListener("qa:vnc-scale", this.onScale)
+    this.observer?.disconnect()
+    clearInterval(this.sizeTimer)
+    clearTimeout(this.fitTimer)
     this.disconnect()
   },
 
@@ -65,7 +96,10 @@ export const VncConsole = {
       this.status("")
       this.retries = 0
       rfb.focus()
+      this.refit()
     })
+    // the guest changed its resolution: the screen is another size, fit it again
+    rfb.addEventListener("desktopresize", () => this.refit?.())
     rfb.addEventListener("disconnect", (e) => {
       if (this.rfb !== rfb) return
       this.rfb = null

@@ -303,6 +303,13 @@ body {
 
 /* The VM console (`Vm.Console`, hooks/vnc_console.js): noVNC draws a canvas
    inside `[data-screen]`; in fullscreen the frame is black. */
+/* noVNC's own wrapper scrolls when the screen is bigger than the room; with the
+   screen centred, the part above and to the left of the room is then out of reach.
+   It never scrolls: the screen is fitted to the room (the hook refits it). */
+.qa-console [data-screen] > div {
+  overflow: hidden !important;
+}
+
 .qa-console [data-screen] {
   width: 100%;
   height: 100%;
